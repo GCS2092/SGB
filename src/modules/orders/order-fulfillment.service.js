@@ -1,7 +1,6 @@
 const prisma = require('../../config/database');
 const { nextInvoiceNumber } = require('../../utils/invoice.utils');
 const { logAudit } = require('../../services/audit.service');
-const { sendPurchaseEventSafely } = require('../../services/meta-conversions.service');
 const {
   fulfillStockSale,
   releaseReservation,
@@ -129,7 +128,7 @@ async function fulfillOrderPayment(orderId, { paymentStatus, note }, adminUser, 
     }
 
     if (!wasPaid && willBeRejected) {
-      await releaseReservation(tx, order.items);
+      await releaseReservation(tx, order.items, order.storeId);
     }
 
     const newOrderStatus = willBePaid
@@ -212,7 +211,6 @@ async function fulfillOrderPayment(orderId, { paymentStatus, note }, adminUser, 
 
   if (paymentStatus === 'PAID') {
     // Même règle pour les paiements à la livraison validés manuellement.
-    await sendPurchaseEventSafely(orderId);
   }
 
   // Relecture complète hors transaction : aucune garantie d'atomicité requise
@@ -267,7 +265,7 @@ async function changeOrderStatusAtomic(orderId, payload, adminUser, ip) {
           });
         }
       } else {
-        await releaseReservation(tx, order.items);
+        await releaseReservation(tx, order.items, order.storeId);
       }
     }
 

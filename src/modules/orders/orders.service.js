@@ -25,17 +25,6 @@ const { getShippingCost, computeOrderTotal } = require('../../utils/shipping.uti
 // ✅ URL du frontend — utilise la variable réellement configurée sur Render.
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 
-function sanitizeAttribution(attribution) {
-  if (!attribution || typeof attribution !== 'object' || Array.isArray(attribution)) return null;
-  const allowedKeys = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'fbclid', 'fbp', 'fbc', 'landing_page', 'captured_at'];
-  const sanitized = Object.fromEntries(
-    allowedKeys
-      .filter((key) => typeof attribution[key] === 'string' && attribution[key].length <= 1000)
-      .map((key) => [key, attribution[key]]),
-  );
-  return Object.keys(sanitized).length ? sanitized : null;
-}
-
 // ─── Destinations locales (paiement à la livraison autorisé) ─────────────────
 const LOCAL_DESTINATIONS = ['SENEGAL'];
 
@@ -135,10 +124,10 @@ async function createOrder(payload, user, ip = null) {
   }
 
   validatePaymentDestination(payload.paymentMethod, payload.destination);
-  validateShippingAddress(payload.shippingAddress);
+  if (payload.shippingAddress) validateShippingAddress(payload.shippingAddress);
 
   const phone = user?.phone || payload.guestPhone;
-  if (!isValidPhone(phone)) {
+  if (phone && !isValidPhone(phone)) {
     const error = new Error('Numéro de téléphone invalide ou manquant.');
     error.status = 400;
     throw error;
@@ -228,7 +217,7 @@ async function createOrder(payload, user, ip = null) {
     }
   }
 
-  const stockErrors = await checkStock(trustedItems);
+  const stockErrors = await checkStock(trustedItems, store.id);
   if (stockErrors.length > 0) {
     const error = new Error(stockErrors[0]);
     error.status = 400;
@@ -274,7 +263,7 @@ async function createOrder(payload, user, ip = null) {
   const reservationExpiresAt = new Date(Date.now() + expiryHours * 60 * 60 * 1000);
 
   const order = await prisma.$transaction(async (tx) => {
-    await reserveStockItems(tx, trustedItems);
+    await reserveStockItems(tx, trustedItems, store.id);
 
     if (couponId) {
       await tx.coupon.update({
@@ -308,8 +297,6 @@ async function createOrder(payload, user, ip = null) {
         shippingAddress: payload.shippingAddress,
         destination: payload.destination || null,
         notes: payload.notes,
-        attribution: sanitizeAttribution(payload.attribution),
-        metaPurchaseEventId: `purchase_${orderNumber}`,
         reservationExpiresAt,
         items: {
           create: trustedItems.map((item) => ({

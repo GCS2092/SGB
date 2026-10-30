@@ -21,27 +21,11 @@ const PALETTE_SGB = {
   footerBg:  '#1a1a2e',
 };
 
-const PALETTE_SONTECH = {
-  primary:   '#0f172a',
-  accent:    '#3b82f6',
-  accentDk:  '#2563eb',
-  white:     '#ffffff',
-  offWhite:  '#f0f6ff',
-  border:    '#dbeafe',
-  textLight: '#64748b',
-  success:   '#2d6a4f',
-  danger:    '#c0392b',
-  tagline:   'TECH & ELECTRONIQUE',
-  brandMain: 'SON',
-  brandSub:  'TECH',
-  footerBg:  '#0f172a',
-};
 
 function getPalette(store) {
   if (!store) return PALETTE_SGB;
   const name = (store.name || '').toLowerCase();
   const code = (store.code || '').toLowerCase();
-  if (name.includes('tech') || code.includes('tech')) return PALETTE_SONTECH;
   return PALETTE_SGB;
 }
 

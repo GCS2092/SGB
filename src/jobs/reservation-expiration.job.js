@@ -21,7 +21,7 @@ async function expireDraftReservations() {
   let count = 0;
   for (const order of expiredOrders) {
     await prisma.$transaction(async (tx) => {
-      await releaseReservation(tx, order.items);
+      await releaseReservation(tx, order.items, order.storeId);
       await tx.order.update({
         where: { id: order.id },
         data: {

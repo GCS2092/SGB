@@ -1,7 +1,6 @@
 const productsService = require('./products.service');
 const importService = require('./products.import.service');
 const exportService = require('./products.export.service');
-const pinterestFeedService = require('./pinterest-feed.service'); // ← ajouté
 
 async function getProducts(req, res, next) {
   try {
@@ -114,17 +113,6 @@ async function assignSupplier(req, res, next) {
   }
 }
 
-// ─── Flux Pinterest Catalogs ────────────────────────────────────────
-async function getPinterestFeed(req, res, next) {
-  try {
-    const xml = await pinterestFeedService.generatePinterestFeed();
-    res.setHeader('Content-Type', 'application/xml; charset=utf-8');
-    res.send(xml);
-  } catch (error) {
-    next(error);
-  }
-}
-
 module.exports = {
   getProducts,
   getProductFilters,
@@ -137,5 +125,4 @@ module.exports = {
   downloadTemplate,
   exportProducts,
   assignSupplier,
-  getPinterestFeed, // ← ajouté
 };

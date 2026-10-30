@@ -22,47 +22,9 @@ const router = express.Router();
 // INSCRIPTION EN 3 ÉTAPES (avec OTP)
 // ─────────────────────────────────────────────────────────────────────────
 
-router.post(
-  '/register/request-otp',
-  authLimiter,
-  body('email').isEmail().withMessage('Email invalide'),
-  checkValidation,
-  authController.requestOtp
-);
-
-router.post(
-  '/register/verify-otp',
-  authLimiter,
-  body('email').isEmail().withMessage('Email invalide'),
-  body('code').isLength({ min: 6, max: 6 }).withMessage('Code à 6 chiffres requis'),
-  checkValidation,
-  authController.verifyOtp
-);
-
-router.post(
-  '/register/complete',
-  authLimiter,
-  body('firstName').notEmpty().withMessage('Prénom requis'),
-  body('lastName').notEmpty().withMessage('Nom requis'),
-  body('password').isLength({ min: 6 }).withMessage('Mot de passe minimum 6 caractères'),
-  checkValidation,
-  authController.completeRegistration
-);
-
 // ─────────────────────────────────────────────────────────────────────────
 // ROUTES EXISTANTES (inchangées)
 // ─────────────────────────────────────────────────────────────────────────
-
-router.post(
-  '/register',
-  authLimiter,
-  body('email').isEmail(),
-  body('password').isLength({ min: 6 }),
-  body('firstName').notEmpty(),
-  body('lastName').notEmpty(),
-  checkValidation,
-  authController.register
-);
 
 router.post(
   '/login',
@@ -92,14 +54,6 @@ router.post(
  *       401:
  *         description: Token Google invalide
  */
-router.post(
-  '/google',
-  authLimiter,
-  body('credential').notEmpty().withMessage('Token Google requis'),
-  checkValidation,
-  authController.googleAuth
-);
-
 router.post('/logout', authenticate, authController.logout);
 
 router.get('/me', authenticate, authController.me);

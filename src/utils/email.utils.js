@@ -1,5 +1,5 @@
 // ============================================================
-// SGB + SonTech — Templates Emails
+// SGB — Templates Emails
 // Thème dynamique selon storeCode
 // ============================================================
 
@@ -21,26 +21,9 @@ const C_SGB = {
   subtitle:  'Mode & Beauté',
 };
 
-// ── Thème SonTech ─────────────────────────────────────────────────────────────
-const C_SONTECH = {
-  primary:   '#2563EB',
-  gold:      '#60A5FA',
-  navy:      '#1E293B',
-  white:     '#FFFFFF',
-  offWhite:  '#F0F9FF',
-  cream:     '#EFF6FF',
-  text:      '#1E293B',
-  textLight: '#64748B',
-  border:    '#BFDBFE',
-  bg:        '#EFF6FF',
-  success:   '#2D6A4F',
-  danger:    '#C0392B',
-  warning:   '#856404',
-  subtitle:  'Électronique & Tech',
-};
 
 function getTheme(storeCode) {
-  return storeCode === 'SONTECH' ? C_SONTECH : C_SGB;
+  return C_SGB;
 }
 
 // ── Layout commun ─────────────────────────────────────────────────────────────

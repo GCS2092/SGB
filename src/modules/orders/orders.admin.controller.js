@@ -1,4 +1,4 @@
-﻿const prisma = require('../../config/database');
+const prisma = require('../../config/database');
 const { notifyOrderStatus, notifyPaymentReceived, notifyOrderConfirmed } = require('../../services/notification.service');
 const { fulfillOrderPayment } = require('./order-fulfillment.service');
 const { buildOrdersWhere, createOrder } = require('./orders.service');
@@ -191,7 +191,7 @@ async function rejectDraftOrder(req, res, next) {
         throw error;
       }
 
-      await releaseReservation(tx, existing.items);
+      await releaseReservation(tx, existing.items, existing.storeId);
 
       const updated = await tx.order.update({
         where: { id },
