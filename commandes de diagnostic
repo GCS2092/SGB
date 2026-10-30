@@ -1,0 +1,124 @@
+& {
+$ErrorActionPreference = 'Continue'
+$be = 'C:\SGB-V2\backend'; Set-Location $be
+function Say($t){ Write-Host "`n=== $t ===" }
+$src = Get-ChildItem src,server.js -Recurse -File -Include *.js
+function Hits($pat){ $m = $src + (Get-Item prisma\schema.prisma) | Select-String -Pattern $pat; "{0,4} hit(s) / {1} fichier(s)" -f @($m).Count, @($m | Group-Object Path).Count }
+
+Say "1. TAILLE"
+"fichiers JS : " + @($src).Count + " | lignes : " + (($src | Get-Content | Measure-Object -Line).Lines)
+"console.log/error : " + (@($src | Select-String 'console\.(log|error|warn)').Count) + " | winston/logger : " + (@($src | Select-String 'logger\.(info|error|warn)').Count)
+"TODO/FIXME/HACK : " + (@($src | Select-String 'TODO|FIXME|HACK').Count)
+"@swagger : " + (@($src | Select-String '@swagger|@openapi').Count)
+
+Say "2. QUALITE / OUTILLAGE"
+foreach ($f in 'README.md','Dockerfile','docker-compose.yml','.dockerignore','.github\workflows','.prettierrc','.editorconfig','eslint.config.mjs','jest.config.js','vitest.config.js') { "{0,-26} {1}" -f $f, $(if (Test-Path $f) {'OK'} else {'absent'}) }
+"fichiers de test : " + @(Get-ChildItem -Recurse -File -Include *.test.js,*.spec.js -Exclude node_modules -ErrorAction SilentlyContinue | Where-Object { $_.FullName -notmatch 'node_modules' }).Count
+$pj = Get-Content package.json -Raw | ConvertFrom-Json
+"scripts : " + (($pj.scripts.PSObject.Properties.Name) -join ', ')
+"engines : " + ($pj.engines | ConvertTo-Json -Compress)
+
+Say "3. DEPENDANCES"
+npm audit --omit=dev 2>&1 | Select-Object -Last 12
+"--- outdated ---"
+npm outdated 2>&1 | Select-Object -First 20
+"--- paquets declares mais jamais importes ---"
+$deps = $pj.dependencies.PSObject.Properties.Name
+foreach ($d in $deps) { if (-not ($src | Select-String -Pattern $d -SimpleMatch -Quiet)) { $d } }
+
+Say "4. ROUTES : protection"
+Get-ChildItem src\modules -Recurse -File -Include *.routes.js | ForEach-Object {
+  $c = Get-Content $_.FullName
+  $all = @($c | Select-String 'router\.(get|post|put|patch|delete)\(|Router\.(get|post|put|patch|delete)\(')
+  $useAuth = [bool]($c | Select-String '\.use\(\s*(authenticate|isAdmin|requireAdmin|requireStaff)')
+  $auth = @($all | Where-Object { $_.Line -match 'authenticate|isAdmin|requireAdmin|requireStaff|requireSeller|requireSetupToken|requirePendingToken' }).Count
+  "{0,-34} routes={1,3} auth_meme_ligne={2,3} use_global={3}" -f $_.Directory.Name+'/'+$_.Name, $all.Count, $auth, $useAuth
+}
+"--- routes sans garde sur la meme ligne (a verifier, hors fichiers use_global) ---"
+Get-ChildItem src\modules -Recurse -File -Include *.routes.js | ForEach-Object {
+  $c = Get-Content $_.FullName
+  if (-not ($c | Select-String '\.use\(\s*(authenticate|isAdmin|requireAdmin|requireStaff)')) {
+    $c | Select-String 'router\.(get|post|put|patch|delete)\(' | Where-Object { $_.Line -notmatch 'authenticate|isAdmin|requireAdmin|requireStaff|requireSeller|requireSetupToken|requirePendingToken' } | ForEach-Object { "{0}:{1} {2}" -f $_.Filename, $_.LineNumber, $_.Line.Trim() }
+  }
+} | Select-Object -First 45
+"--- routes dans app.js hors /api/modules ---"
+Select-String -Path src\app.js -Pattern "app\.(get|post)\(" | ForEach-Object { "{0}: {1}" -f $_.LineNumber, $_.Line.Trim() }
+
+Say "5. SECURITE"
+"helmet : " + (Hits 'helmet\(')
+"rate limit : " + (Hits 'rateLimit\(')
+"express-validator : " + (Hits "require\('express-validator'\)")
+"bcrypt rounds : " + ((($src | Select-String 'bcrypt\.hash\([^,]+,\s*(\d+)' -AllMatches).Matches | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique) -join ',')
+"--- secret JWT : fallback en dur ? ---"
+$src | Select-String 'JWT_SECRET' | ForEach-Object { "{0}:{1} {2}" -f $_.Filename, $_.LineNumber, $_.Line.Trim() }
+"--- jwt.utils ---"; Get-Content src\utils\jwt.utils.js | Select-Object -First 30
+"--- expiration JWT ---"; $src | Select-String 'expiresIn' | Select-Object -First 8 | ForEach-Object { "{0}:{1} {2}" -f $_.Filename, $_.LineNumber, $_.Line.Trim() }
+"--- app.js (debug, swagger, trust proxy) ---"
+Get-Content src\app.js | Select-Object -Skip 62 -First 36
+"--- error.middleware ---"; Get-Content src\middlewares\error.middleware.js | Select-Object -First 40
+"--- upload.middleware (types, taille) ---"; Select-String -Path src\middlewares\upload.middleware.js -Pattern 'fileFilter|mimetype|limits|fileSize|allowed' | ForEach-Object { "{0}: {1}" -f $_.LineNumber, $_.Line.Trim() }
+"--- rate limits definis ---"; Get-Content src\middlewares\rateLimit.middleware.js | Select-Object -First 40
+"--- SQL brut ---"; $src | Select-String 'queryRawUnsafe|executeRawUnsafe' | ForEach-Object { "{0}:{1}" -f $_.Filename, $_.LineNumber }
+
+Say "6. ROBUSTESSE"
+"\$transaction : " + (Hits '\$transaction')
+"FOR UPDATE (verrous) : " + (Hits 'FOR UPDATE')
+"arret propre SIGTERM/SIGINT : " + (Hits 'SIGTERM|SIGINT')
+"unhandledRejection : " + (Hits 'unhandledRejection|uncaughtException')
+"validation des env au demarrage : " + (Hits 'required.*env|missing.*env|envalid|zod|joi')
+"pagination : " + (Hits 'paginat')
+"cron dans server.js : " + (Hits 'cron\.schedule')
+"compression : " + (Hits "require\('compression'\)")
+"health + DB : "; Select-String -Path src\app.js -Pattern 'health' | ForEach-Object { $_.Line.Trim() }
+"--- tests de refus de stock negatif ---"
+$src | Select-String 'Stock insuffisant|insuffisant|stock.*<\s*0|negative' | Select-Object -First 5 | ForEach-Object { "{0}:{1} {2}" -f $_.Filename, $_.LineNumber, $_.Line.Trim() }
+
+Say "7. SCHEMA PRISMA"
+$sch = Get-Content prisma\schema.prisma -Raw
+"modeles : " + ([regex]::Matches($sch,'(?m)^model ')).Count + " | enums : " + ([regex]::Matches($sch,'(?m)^enum ')).Count
+"@@index : " + ([regex]::Matches($sch,'@@index')).Count + " | @@unique : " + ([regex]::Matches($sch,'@@unique')).Count
+"onDelete explicites : " + ([regex]::Matches($sch,'onDelete')).Count + " | relations : " + ([regex]::Matches($sch,'@relation\(fields')).Count
+"montants en Float (risque d'arrondi) :"; Select-String -Path prisma\schema.prisma -Pattern '^\s*\w*(price|Price|total|amount|cost|Cost|subtotal)\w*\s+Float' | ForEach-Object { "{0}: {1}" -f $_.LineNumber, ($_.Line.Trim() -replace '\s+',' ') }
+"soft delete (deletedAt) : " + ([regex]::Matches($sch,'deletedAt')).Count
+$lines = Get-Content prisma\schema.prisma
+foreach ($n in 'StockMovementType','OrderStatus','ExpenseCategory','StoreStaffRole','TransferStatus','ProductStatus','InvoiceStatus') {
+  $i = ($lines | Select-String "^enum $n \{").LineNumber
+  if ($i) { "--- enum $n ---"; ($lines | Select-Object -Skip $i | Select-Object -First 20 | Where-Object { $_ -notmatch '^\}' -and $_.Trim() -ne '' } | ForEach-Object { $_.Trim() }) -join ', ' }
+}
+foreach ($n in 'Product','ProductVariant','StockMovement') {
+  $i = ($lines | Select-String "^model $n \{").LineNumber
+  if ($i) { "--- model $n ---"; $lines | Select-Object -Skip $i -First 50 | ForEach-Object { $_.Trim() } | Where-Object { $_ -match '^\w+\s+\S+' -and $_ -notmatch '^@@|^//' } | ForEach-Object { ($_ -split '\s+')[0..1] -join ':' } | Select-Object -First 45 | Join-String -Separator ', ' }
+}
+
+Say "8. FONCTIONNALITES STOCK : presentes ?"
+$feat = [ordered]@{
+  'SKU / code-barres'            = 'barcode|\bsku\b'
+  'seuil min / reappro'          = 'minStock|lowStock|reorder|stockThreshold|alertThreshold'
+  'inventaire / comptage'        = 'inventory|inventaire|stocktake|stockCount'
+  'lots / peremption'            = 'expiry|expiration|expiresAt|batchNumber|\blot\b'
+  'bons de commande fournisseur' = 'purchaseOrder|PurchaseOrder|bon.?de.?commande'
+  'retours / avoirs'             = 'CreditNote|returnItem|retour'
+  'unites de mesure'             = 'unit\b|unitOfMeasure'
+  'import / export Excel'        = 'xlsx|exportProducts|import'
+  'reinit mot de passe'          = 'forgot|resetPassword|passwordReset'
+  'refresh token'                = 'refreshToken|refresh'
+  'historique des prix'          = 'priceHistory|PriceHistory'
+  'valorisation du stock'        = 'valuation|valorisation|purchasePrice'
+  'multi-devises'                = 'exchangeRate|currency'
+  'roles par boutique'           = 'StoreStaffRole|UserStore'
+  'audit trail'                  = 'AuditLog|audit\.service'
+  'sauvegarde / backup'          = 'pg_dump|backup'
+  'websocket temps reel'         = 'socket\.io|Server\(.*http'
+}
+foreach ($k in $feat.Keys) { "{0,-30} {1}" -f $k, (Hits $feat[$k]) }
+
+Say "9. CODE BOUTIQUE RESTANT"
+foreach ($m in 'cart','wishlist','reviews','coupons','payments','addresses','sellers') { $f = Get-ChildItem "src\modules\$m" -Recurse -File -ErrorAction SilentlyContinue; "{0,-10} {1} fichiers" -f $m, @($f).Count }
+"meta/pinterest/google/otp : " + (Hits 'meta-conversions|pinterest|loginWithGoogle|OtpCode')
+"champs guest/shipping dans Order : " + (Hits 'guestEmail|shippingAddress|metaPurchase')
+
+Say "10. AUDIT DES ROLES"
+"requireAdmin/isAdmin : " + (Hits 'requireAdmin|isAdmin') + " | requireStaff : " + (Hits 'requireStaff') + " | loadStoreContext : " + (Hits 'loadStoreContext')
+"filtrage par boutique (storeId dans where) : " + (Hits 'storeId')
+Get-Content src\middlewares\store.middleware.js | Select-Object -First 45
+} *>&1 | Out-String | Set-Clipboard
