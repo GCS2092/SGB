@@ -8,36 +8,36 @@ datasource db {
 }
 
 model User {
-  id            String         @id @default(cuid())
-  email         String         @unique
-  password      String?
-  googleId      String?        @unique
-  firstName     String
-  lastName      String
-  phone         String?
-  role          Role           @default(CUSTOMER)
-  refreshToken  String?
+  id                   String          @id @default(cuid())
+  email                String          @unique
+  password             String?
+  googleId             String?         @unique
+  firstName            String
+  lastName             String
+  phone                String?
+  role                 Role            @default(CUSTOMER)
+  refreshToken         String?
   twoFactorSecret      String?
-  twoFactorEnabled     Boolean  @default(false)
-  twoFactorBackupCodes String?  @db.Text
-  isActive      Boolean        @default(true)
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  addresses     Address[]
-  carts         Cart[]
-  notifications Notification[]
-  orders        Order[]
-  reviews       Review[]
-  stockAlerts   StockAlert[]
-  userStores    UserStore[]
-  wishlist      Wishlist[]
-  sellerProducts Product[]      @relation("SellerProducts")
-  uploadedImages UploadedImage[]
+  twoFactorEnabled     Boolean         @default(false)
+  twoFactorBackupCodes String?         @db.Text
+  isActive             Boolean         @default(true)
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
+  addresses            Address[]
+  carts                Cart[]
+  notifications        Notification[]
+  orders               Order[]
+  reviews              Review[]
+  stockAlerts          StockAlert[]
+  userStores           UserStore[]
+  wishlist             Wishlist[]
+  sellerProducts       Product[]       @relation("SellerProducts")
+  uploadedImages       UploadedImage[]
   // Champs boutique vendeur
-  storeName     String?        @db.Text
-  storeDescription String?      @db.Text
-  storeLogo     String?
-  storeContact  String?
+  storeName            String?         @db.Text
+  storeDescription     String?         @db.Text
+  storeLogo            String?
+  storeContact         String?
 }
 
 model Store {
@@ -66,6 +66,7 @@ model Store {
   transfersFrom    StockTransfer[]   @relation("TransferFrom")
   transfersTo      StockTransfer[]   @relation("TransferTo")
   userStores       UserStore[]
+  storeStocks      StoreStock[]
 }
 
 model UserStore {
@@ -113,7 +114,7 @@ model Product {
   id                 String              @id @default(cuid())
   name               String
   slug               String              @unique
-  description String @db.Text
+  description        String              @db.Text
   price              Int
   comparePrice       Int?
   stock              Int
@@ -128,15 +129,15 @@ model Product {
   updatedAt          DateTime            @updatedAt
   variantDisplayMode VariantDisplayMode  @default(SIZE_FIRST)
   storeId            String?
-  supplierId         String?              // ← doit être présent
-  sellerId           String?              // ← NOUVEAU
-  status             ProductStatus       @default(DRAFT)  // ← NOUVEAU
+  supplierId         String? // ← doit être présent
+  sellerId           String? // ← NOUVEAU
+  status             ProductStatus       @default(DRAFT) // ← NOUVEAU
   cartItems          CartItem[]
   orderItems         OrderItem[]
   category           Category            @relation(fields: [categoryId], references: [id])
   store              Store?              @relation(fields: [storeId], references: [id])
-  supplier           Supplier?            @relation(fields: [supplierId], references: [id])  // ← doit être présent
-  seller             User?                @relation("SellerProducts", fields: [sellerId], references: [id])  // ← NOUVEAU
+  supplier           Supplier?           @relation(fields: [supplierId], references: [id]) // ← doit être présent
+  seller             User?               @relation("SellerProducts", fields: [sellerId], references: [id]) // ← NOUVEAU
   images             ProductImage[]
   variants           ProductVariant[]
   reviews            Review[]
@@ -144,12 +145,16 @@ model Product {
   stockMovements     StockMovement[]
   transferItems      StockTransferItem[]
   wishlist           Wishlist[]
+  storeStocks        StoreStock[]
+  sku                String?             @unique
+  barcode            String?             @unique
+  deletedAt          DateTime?
 
   @@index([categoryId])
   @@index([storeId])
-  @@index([supplierId])  // ← doit être présent
-  @@index([sellerId])  // ← NOUVEAU
-  @@index([status])  // ← NOUVEAU
+  @@index([supplierId]) // ← doit être présent
+  @@index([sellerId]) // ← NOUVEAU
+  @@index([status]) // ← NOUVEAU
 }
 
 model ProductImage {
@@ -180,6 +185,9 @@ model ProductVariant {
   stockAlerts    StockAlert[]
   stockMovements StockMovement[]
   transferItems  StockTransferItem[]
+  storeStocks    StoreStock[]
+  sku            String?             @unique
+  barcode        String?             @unique
 
   @@unique([productId, size, color])
 }
@@ -261,42 +269,43 @@ model Coupon {
 }
 
 model Order {
-  id                   String               @id @default(cuid())
-  orderNumber          String               @unique
-  storeId              String
-  userId               String?
-  guestEmail           String?
-  guestPhone           String?
-  guestName            String?
-  status               OrderStatus          @default(PENDING)
-  paymentMethod        PaymentMethod
-  paymentStatus        PaymentStatus        @default(PENDING)
-  subtotal             Int
-  shippingCost         Int
-  discount             Int                  @default(0)
-  storeDiscount        Int                  @default(0)
-  total                Int
-  shippingAddress      Json
-  destination          String?
-  notes                String?
-  attribution          Json?
-  metaPurchaseEventId  String?              @unique
-  metaPurchaseSentAt   DateTime?
-  metaPurchaseLastError String?
-  reservationExpiresAt DateTime?
-  couponId             String?
-  createdAt            DateTime             @default(now())
-  updatedAt            DateTime             @updatedAt
-  invoice              Invoice?
-  coupon               Coupon?              @relation(fields: [couponId], references: [id])
-  store                Store                @relation(fields: [storeId], references: [id])
-  user                 User?                @relation(fields: [userId], references: [id])
-  items                OrderItem[]
-  statusHistory        OrderStatusHistory[]
-  tracking             OrderTracking[]
-  payments             Payment[]
-  confirmationEmailStatus String?  @default("PENDING") // PENDING | SENT | FAILED
-  confirmationEmailError  String?  @db.Text
+  id                      String               @id @default(cuid())
+  orderNumber             String               @unique
+  storeId                 String
+  userId                  String?
+  guestEmail              String?
+  guestPhone              String?
+  guestName               String?
+  status                  OrderStatus          @default(PENDING)
+  paymentMethod           PaymentMethod
+  paymentStatus           PaymentStatus        @default(PENDING)
+  subtotal                Int
+  shippingCost            Int
+  discount                Int                  @default(0)
+  storeDiscount           Int                  @default(0)
+  total                   Int
+  shippingAddress         Json
+  destination             String?
+  notes                   String?
+  attribution             Json?
+  metaPurchaseEventId     String?              @unique
+  metaPurchaseSentAt      DateTime?
+  metaPurchaseLastError   String?
+  reservationExpiresAt    DateTime?
+  couponId                String?
+  createdAt               DateTime             @default(now())
+  updatedAt               DateTime             @updatedAt
+  invoice                 Invoice?
+  coupon                  Coupon?              @relation(fields: [couponId], references: [id])
+  store                   Store                @relation(fields: [storeId], references: [id])
+  user                    User?                @relation(fields: [userId], references: [id])
+  items                   OrderItem[]
+  statusHistory           OrderStatusHistory[]
+  tracking                OrderTracking[]
+  payments                Payment[]
+  confirmationEmailStatus String?              @default("PENDING") // PENDING | SENT | FAILED
+  confirmationEmailError  String?              @db.Text
+
   @@index([storeId])
   @@index([status, reservationExpiresAt])
   @@index([couponId])
@@ -476,7 +485,8 @@ model Supplier {
   updatedAt    DateTime        @updatedAt
   expenses     Expense[]
   stockEntries StockMovement[]
-  products     Product[] 
+  products     Product[]
+  deletedAt    DateTime?
 }
 
 model StockMovement {
@@ -698,6 +708,7 @@ enum ProductStatus {
   PUBLISHED
   OUT_OF_STOCK
 }
+
 model UploadedImage {
   id         String   @id @default(cuid())
   publicId   String   @unique
@@ -707,4 +718,22 @@ model UploadedImage {
   uploader   User     @relation(fields: [uploadedBy], references: [id])
 
   @@index([uploadedBy])
+}
+
+model StoreStock {
+  id               String          @id @default(cuid())
+  storeId          String
+  productId        String
+  variantId        String?
+  quantity         Int             @default(0)
+  reservedQuantity Int             @default(0)
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  store            Store           @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  product          Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variant          ProductVariant? @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  @@unique([storeId, productId, variantId])
+  @@index([productId])
+  @@index([variantId])
 }
