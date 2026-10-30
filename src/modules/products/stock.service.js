@@ -1,6 +1,6 @@
 const prisma = require('../../config/database');
 
-const IN_TYPES = ['IN', 'RETURN_IN', 'TRANSFER_IN'];
+const IN_TYPES = ['IN', 'RETURN_IN', 'TRANSFER_IN', 'ADJUSTMENT'];
 
 function availableQty(stock, reservedStock) {
   return Math.max(0, stock - (reservedStock || 0));
