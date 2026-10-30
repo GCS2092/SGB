@@ -2,6 +2,7 @@ require('dotenv').config();
 
 const express = require('express');
 const helmet = require('helmet');
+const compression = require('compression');
 const cors = require('cors');
 const { authenticate } = require('./middlewares/auth.middleware');
 const reportRoutes = require('./modules/reports/report.routes');
@@ -44,6 +45,7 @@ const allowedOrigins = [
 ];
 
 app.use(helmet());
+app.use(compression());
 app.use(cors({
   origin: (origin, callback) => {
     if (!origin || allowedOrigins.includes(origin)) {
