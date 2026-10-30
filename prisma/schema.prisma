@@ -37,32 +37,34 @@ model User {
 }
 
 model Store {
-  id               String            @id @default(cuid())
-  code             String            @unique
-  name             String
-  address          String?
-  phone            String?
-  isMain           Boolean           @default(false)
-  isActive         Boolean           @default(true)
-  taxRate          Float             @default(0)
-  discountRate     Float             @default(0)
-  currency         String            @default("XOF")
-  exchangeRate     Float             @default(1)
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
-  auditLogs        AuditLog[]
-  coupons          Coupon[]
-  creditNotes      CreditNote[]
-  expenses         Expense[]
-  invoices         Invoice[]
-  invoiceSequences InvoiceSequence[]
-  orders           Order[]
-  products         Product[]
-  stockMovements   StockMovement[]
-  transfersFrom    StockTransfer[]   @relation("TransferFrom")
-  transfersTo      StockTransfer[]   @relation("TransferTo")
-  userStores       UserStore[]
-  storeStocks      StoreStock[]
+  id                String             @id @default(cuid())
+  code              String             @unique
+  name              String
+  address           String?
+  phone             String?
+  isMain            Boolean            @default(false)
+  isActive          Boolean            @default(true)
+  taxRate           Float              @default(0)
+  discountRate      Float              @default(0)
+  currency          String             @default("XOF")
+  exchangeRate      Float              @default(1)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  auditLogs         AuditLog[]
+  coupons           Coupon[]
+  creditNotes       CreditNote[]
+  expenses          Expense[]
+  invoices          Invoice[]
+  invoiceSequences  InvoiceSequence[]
+  orders            Order[]
+  products          Product[]
+  stockMovements    StockMovement[]
+  transfersFrom     StockTransfer[]    @relation("TransferFrom")
+  transfersTo       StockTransfer[]    @relation("TransferTo")
+  userStores        UserStore[]
+  storeStocks       StoreStock[]
+  purchaseOrders    PurchaseOrder[]
+  inventorySessions InventorySession[]
 }
 
 model UserStore {
@@ -125,6 +127,8 @@ model Product {
   sku                String?             @unique
   barcode            String?             @unique
   deletedAt          DateTime?
+  purchaseOrderItems PurchaseOrderItem[]
+  inventoryLines     InventoryLine[]
 
   @@index([categoryId])
   @@index([storeId])
@@ -147,22 +151,24 @@ model ProductImage {
 }
 
 model ProductVariant {
-  id             String              @id @default(cuid())
-  productId      String
-  size           String
-  color          String
-  stock          Int
-  reservedStock  Int                 @default(0)
-  createdAt      DateTime            @default(now())
-  updatedAt      DateTime            @updatedAt
-  orderItems     OrderItem[]
-  product        Product             @relation(fields: [productId], references: [id])
-  stockAlerts    StockAlert[]
-  stockMovements StockMovement[]
-  transferItems  StockTransferItem[]
-  storeStocks    StoreStock[]
-  sku            String?             @unique
-  barcode        String?             @unique
+  id                 String              @id @default(cuid())
+  productId          String
+  size               String
+  color              String
+  stock              Int
+  reservedStock      Int                 @default(0)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  orderItems         OrderItem[]
+  product            Product             @relation(fields: [productId], references: [id])
+  stockAlerts        StockAlert[]
+  stockMovements     StockMovement[]
+  transferItems      StockTransferItem[]
+  storeStocks        StoreStock[]
+  sku                String?             @unique
+  barcode            String?             @unique
+  purchaseOrderItems PurchaseOrderItem[]
+  inventoryLines     InventoryLine[]
 
   @@unique([productId, size, color])
 }
@@ -389,18 +395,19 @@ model Setting {
 }
 
 model Supplier {
-  id           String          @id @default(cuid())
-  name         String
-  email        String?
-  phone        String?
-  address      String?
-  isActive     Boolean         @default(true)
-  createdAt    DateTime        @default(now())
-  updatedAt    DateTime        @updatedAt
-  expenses     Expense[]
-  stockEntries StockMovement[]
-  products     Product[]
-  deletedAt    DateTime?
+  id             String          @id @default(cuid())
+  name           String
+  email          String?
+  phone          String?
+  address        String?
+  isActive       Boolean         @default(true)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  expenses       Expense[]
+  stockEntries   StockMovement[]
+  products       Product[]
+  deletedAt      DateTime?
+  purchaseOrders PurchaseOrder[]
 }
 
 model StockMovement {
@@ -633,4 +640,84 @@ model StoreStock {
   @@unique([storeId, productId, variantId])
   @@index([productId])
   @@index([variantId])
+}
+
+enum PurchaseOrderStatus {
+  DRAFT
+  ORDERED
+  PARTIAL
+  RECEIVED
+  CANCELLED
+}
+
+enum InventoryStatus {
+  OPEN
+  VALIDATED
+  CANCELLED
+}
+
+model PurchaseOrder {
+  id         String              @id @default(cuid())
+  poNumber   String              @unique
+  storeId    String
+  supplierId String
+  status     PurchaseOrderStatus @default(DRAFT)
+  notes      String?
+  expectedAt DateTime?
+  createdBy  String?
+  createdAt  DateTime            @default(now())
+  updatedAt  DateTime            @updatedAt
+  store      Store               @relation(fields: [storeId], references: [id])
+  supplier   Supplier            @relation(fields: [supplierId], references: [id])
+  items      PurchaseOrderItem[]
+
+  @@index([storeId, status])
+  @@index([supplierId])
+}
+
+model PurchaseOrderItem {
+  id               String          @id @default(cuid())
+  purchaseOrderId  String
+  productId        String
+  variantId        String?
+  quantityOrdered  Int
+  quantityReceived Int             @default(0)
+  unitCost         Int
+  purchaseOrder    PurchaseOrder   @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  product          Product         @relation(fields: [productId], references: [id])
+  variant          ProductVariant? @relation(fields: [variantId], references: [id])
+
+  @@index([purchaseOrderId])
+  @@index([productId])
+}
+
+model InventorySession {
+  id          String          @id @default(cuid())
+  number      String          @unique
+  storeId     String
+  status      InventoryStatus @default(OPEN)
+  notes       String?
+  createdBy   String?
+  validatedBy String?
+  validatedAt DateTime?
+  createdAt   DateTime        @default(now())
+  store       Store           @relation(fields: [storeId], references: [id])
+  lines       InventoryLine[]
+
+  @@index([storeId, status])
+}
+
+model InventoryLine {
+  id          String           @id @default(cuid())
+  sessionId   String
+  productId   String
+  variantId   String?
+  expectedQty Int
+  countedQty  Int?
+  appliedDiff Int?
+  session     InventorySession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  product     Product          @relation(fields: [productId], references: [id])
+  variant     ProductVariant?  @relation(fields: [variantId], references: [id])
+
+  @@index([sessionId])
 }

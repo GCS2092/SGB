@@ -95,6 +95,8 @@ app.use('/api/admin/audit', auditRoutes);
 app.use('/api/admin/invoices', invoicesRoutes);
 app.use('/api/admin/stores', authenticate, storesRoutes);
 app.use('/api/admin/stock-transfers', stockTransfersRoutes);
+app.use('/api/admin/purchase-orders', require('./modules/purchase-orders/purchase-orders.routes'));
+app.use('/api/admin/inventory', require('./modules/inventory/inventory.routes'));
 app.use('/api/admin/credit-notes', creditNotesRoutes);
 app.use('/api/admin/reports', reportRoutes);
 app.use('/api/sellers', sellersRoutes.router);
