@@ -9,7 +9,8 @@
     "db:migrate": "prisma migrate dev --name init",
     "db:generate": "prisma generate",
     "db:studio": "prisma studio",
-    "db:seed": "prisma db seed"
+    "db:seed": "prisma db seed",
+    "test": "node tests/stock.test.js"
   },
   "prisma": {
     "seed": "node prisma/seed.js"

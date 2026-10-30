@@ -2,6 +2,7 @@ const prisma = require('../../config/database');
 const { nextTransferNumber } = require('../../utils/invoice.utils');
 const { logAudit } = require('../../services/audit.service');
 const { assertStoreAccess } = require('../stores/store.service');
+const { transferStock } = require('../products/stock.service');
 
 async function listTransfers(req, res, next) {
   try {
@@ -116,87 +117,11 @@ async function validateTransfer(req, res, next) {
         throw error;
       }
 
-      // ── Vérification stock disponible AVANT toute écriture ──────────
-      for (const item of existing.items) {
-        if (item.variantId) {
-          const variant = await tx.productVariant.findUnique({ where: { id: item.variantId } });
-          const available = Math.max(0, variant.stock - (variant.reservedStock || 0));
-          if (available < item.quantity) {
-            const error = new Error(
-              `Stock insuffisant pour la variante ${item.variantId} — disponible : ${available}`
-            );
-            error.status = 400;
-            throw error;
-          }
-        } else {
-          const product = await tx.product.findUnique({ where: { id: item.productId } });
-          const available = Math.max(0, product.stock - (product.reservedStock || 0));
-          if (available < item.quantity) {
-            const error = new Error(
-              `Stock insuffisant pour le produit ${product.name} — disponible : ${available}`
-            );
-            error.status = 400;
-            throw error;
-          }
-        }
-      }
-
-      // ── Mouvements de stock ──────────────────────────────────────────
-      for (const item of existing.items) {
-        // 1. Décrémente la boutique SOURCE
-        if (item.variantId) {
-          await tx.productVariant.update({
-            where: { id: item.variantId },
-            data:  { stock: { decrement: item.quantity } },
-          });
-        } else {
-          await tx.product.update({
-            where: { id: item.productId },
-            data:  { stock: { decrement: item.quantity } },
-          });
-        }
-
-        // 2. ✅ Incrémente la boutique DESTINATION (bug corrigé)
-        if (item.variantId) {
-          await tx.productVariant.update({
-            where: { id: item.variantId },
-            data:  { stock: { increment: item.quantity } },
-          });
-        } else {
-          await tx.product.update({
-            where: { id: item.productId },
-            data:  { stock: { increment: item.quantity } },
-          });
-        }
-
-        // 3. StockMovement TRANSFER_OUT (boutique source)
-        await tx.stockMovement.create({
-          data: {
-            productId:  item.productId,
-            variantId:  item.variantId || null,
-            type:       'TRANSFER_OUT',
-            quantity:   item.quantity,
-            storeId:    existing.fromStoreId,
-            transferId: existing.id,
-            reason:     `Transfert ${existing.transferNumber} → boutique destination`,
-            createdBy:  req.user?.id,
-          },
-        });
-
-        // 4. StockMovement TRANSFER_IN (boutique destination)
-        await tx.stockMovement.create({
-          data: {
-            productId:  item.productId,
-            variantId:  item.variantId || null,
-            type:       'TRANSFER_IN',
-            quantity:   item.quantity,
-            storeId:    existing.toStoreId,
-            transferId: existing.id,
-            reason:     `Transfert ${existing.transferNumber} ← boutique source`,
-            createdBy:  req.user?.id,
-          },
-        });
-      }
+      await transferStock(tx, {
+        fromStoreId: existing.fromStoreId, toStoreId: existing.toStoreId,
+        items: existing.items, transferId: existing.id,
+        transferNumber: existing.transferNumber, createdBy: req.user?.id,
+      });
 
       // ── Passe le statut à VALIDATED ─────────────────────────────────
       const updated = await tx.stockTransfer.update({

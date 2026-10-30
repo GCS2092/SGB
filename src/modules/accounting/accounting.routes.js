@@ -1,3 +1,4 @@
+const { applyMovement } = require('../products/stock.service');
 // backend/src/modules/accounting/accounting.routes.js
 
 const express = require('express');
@@ -173,46 +174,16 @@ router.post('/stock-movements', isAdmin, async (req, res) => {
       return res.status(400).json({ error: 'storeId est requis pour identifier la boutique' });
     }
 
-    const totalCost = unitCost ? Number(unitCost) * Number(quantity) : null;
+    const qtyN = Number(quantity);
+    const costN = unitCost ? Number(unitCost) : null;
+    const movement = await prisma.$transaction((tx) => applyMovement(tx, {
+      storeId, productId, variantId: variantId || null, type, quantity: qtyN, unitCost: costN,
+      reason: reason || null, supplierId: supplierId || null, reference: reference || null,
+      orderId: orderId || null, createdBy: req.user.id,
+    }));
 
-    const movement = await prisma.stockMovement.create({
-      data: {
-        productId,
-        variantId:  variantId  || null,
-        type,
-        quantity:   Number(quantity),
-        unitCost:   unitCost   ? Number(unitCost)  : null,
-        totalCost,
-        reason:     reason     || null,
-        supplierId: supplierId || null,
-        reference:  reference  || null,
-        orderId:    orderId    || null,
-        storeId,
-        createdBy:  req.user.id,
-      },
-    });
-
-    const isIncoming  = ['IN', 'RETURN_IN', 'ADJUSTMENT'].includes(type);
-    const stockDelta  = isIncoming ? Number(quantity) : -Number(quantity);
-
-    if (variantId) {
-      await prisma.productVariant.update({
-        where: { id: variantId },
-        data:  { stock: { increment: stockDelta } },
-      });
-    } else {
-      await prisma.product.update({
-        where: { id: productId },
-        data:  { stock: { increment: stockDelta } },
-      });
-    }
-
-    // Met à jour le prix d'achat sur entrée stock avec coût
-    if (type === 'IN' && unitCost) {
-      await prisma.product.update({
-        where: { id: productId },
-        data:  { purchasePrice: Number(unitCost) },
-      });
+    if (type === 'IN' && costN) {
+      await prisma.product.update({ where: { id: productId }, data: { purchasePrice: costN } });
     }
 
     res.json(movement);

@@ -1,272 +1,166 @@
 const prisma = require('../../config/database');
 
+const IN_TYPES = ['IN', 'RETURN_IN', 'TRANSFER_IN'];
+
 function availableQty(stock, reservedStock) {
   return Math.max(0, stock - (reservedStock || 0));
 }
 
-async function loadItemStock(item) {
-  if (item.variantId) {
-    const variant = await prisma.productVariant.findUnique({
-      where: { id: item.variantId },
-      include: { product: { select: { id: true, name: true } } },
-    });
-    if (!variant) return null;
-    return {
-      productId: variant.productId,
-      productName: variant.product.name,
-      variantId: variant.id,
-      stock: variant.stock,
-      reservedStock: variant.reservedStock,
-      purchasePrice: variant.product?.purchasePrice,
-    };
-  }
-
-  const product = await prisma.product.findUnique({ where: { id: item.productId } });
-  if (!product) return null;
-  return {
-    productId: product.id,
-    productName: product.name,
-    variantId: null,
-    stock: product.stock,
-    reservedStock: product.reservedStock,
-    purchasePrice: product.purchasePrice,
-  };
+function httpError(message, status = 400) {
+  const e = new Error(message);
+  e.status = status;
+  return e;
 }
 
-async function checkStock(items) {
-  const errors = [];
-
-  for (const item of items) {
-    const row = await loadItemStock(item);
-    if (!row) {
-      errors.push(`Produit introuvable : ${item.productId}`);
-      continue;
-    }
-    const available = availableQty(row.stock, row.reservedStock);
-    if (available < item.quantity) {
-      errors.push(
-        `Stock insuffisant pour ${row.productName} — disponible : ${available}`,
-      );
-    }
-  }
-
-  return errors;
+async function mainStoreId(tx) {
+  const s = (await tx.store.findFirst({ where: { isMain: true } })) || (await tx.store.findFirst());
+  if (!s) throw httpError('Aucune boutique configuree.', 500);
+  return s.id;
 }
 
-async function reserveStockItems(tx, items) {
-  for (const item of items) {
-    if (item.variantId) {
-      const [variant] = await tx.$queryRaw`
-        SELECT stock, "reservedStock" FROM "ProductVariant"
-        WHERE id = ${item.variantId} FOR UPDATE
-      `;
-      if (!variant) {
-        const error = new Error('Variante introuvable.');
-        error.status = 404;
-        throw error;
-      }
-      const available = availableQty(variant.stock, variant.reservedStock);
-      if (available < item.quantity) {
-        const error = new Error(`Stock insuffisant pour la variante sélectionnée.`);
-        error.status = 400;
-        throw error;
-      }
-      await tx.productVariant.update({
-        where: { id: item.variantId },
-        data: { reservedStock: { increment: item.quantity } },
-      });
-    } else {
-      const [product] = await tx.$queryRaw`
-        SELECT stock, "reservedStock", name FROM "Product"
-        WHERE id = ${item.productId} FOR UPDATE
-      `;
-      if (!product) {
-        const error = new Error('Produit introuvable.');
-        error.status = 404;
-        throw error;
-      }
-      const available = availableQty(product.stock, product.reservedStock);
-      if (available < item.quantity) {
-        const error = new Error(`Stock insuffisant pour : ${product.name}`);
-        error.status = 400;
-        throw error;
-      }
-      await tx.product.update({
-        where: { id: item.productId },
-        data: { reservedStock: { increment: item.quantity } },
-      });
-    }
+/** Verrouille (ou cree) la ligne StoreStock et la renvoie. */
+async function lockStoreStock(tx, { storeId, productId, variantId = null }) {
+  const rows = variantId
+    ? await tx.$queryRaw`SELECT id, quantity, "reservedQuantity" FROM "StoreStock"
+        WHERE "storeId" = ${storeId} AND "productId" = ${productId} AND "variantId" = ${variantId} FOR UPDATE`
+    : await tx.$queryRaw`SELECT id, quantity, "reservedQuantity" FROM "StoreStock"
+        WHERE "storeId" = ${storeId} AND "productId" = ${productId} AND "variantId" IS NULL FOR UPDATE`;
+  if (rows[0]) return rows[0];
+  try {
+    await tx.storeStock.create({ data: { storeId, productId, variantId, quantity: 0, reservedQuantity: 0 } });
+  } catch (e) {
+    if (e.code !== 'P2002') throw e;
   }
-}
-
-async function releaseReservation(tx, items) {
-  for (const item of items) {
-    if (item.variantId) {
-      await tx.productVariant.update({
-        where: { id: item.variantId },
-        data: { reservedStock: { decrement: item.quantity } },
-      });
-    } else {
-      await tx.product.update({
-        where: { id: item.productId },
-        data: { reservedStock: { decrement: item.quantity } },
-      });
-    }
-  }
+  const again = variantId
+    ? await tx.$queryRaw`SELECT id, quantity, "reservedQuantity" FROM "StoreStock"
+        WHERE "storeId" = ${storeId} AND "productId" = ${productId} AND "variantId" = ${variantId} FOR UPDATE`
+    : await tx.$queryRaw`SELECT id, quantity, "reservedQuantity" FROM "StoreStock"
+        WHERE "storeId" = ${storeId} AND "productId" = ${productId} AND "variantId" IS NULL FOR UPDATE`;
+  return again[0];
 }
 
 /**
- * ⚡ OPTIMISÉ : 1 seule requête de lecture par item (au lieu de 2 : product
- * pour le purchasePrice, puis variant/product à nouveau pour le stock).
- * Réduit de moitié le nombre d'aller-retours DB dans cette boucle, ce qui
- * réduit d'autant le temps total passé dans la transaction appelante et
- * donc le risque de dépasser le timeout Prisma.
+ * Point d'entree unique : applique delta (+/-) sur une boutique et met a jour le total.
+ * reservedDelta modifie la quantite reservee (meme boutique).
  */
-async function fulfillStockSale(tx, items, orderId, createdBy = null, storeId = null) {
-  for (const item of items) {
-    if (item.variantId) {
-      await tx.$queryRaw`
-        SELECT id FROM "ProductVariant" WHERE id = ${item.variantId} FOR UPDATE
-      `;
-      const variant = await tx.productVariant.findUnique({
-        where: { id: item.variantId },
-        include: { product: { select: { purchasePrice: true } } },
-      });
+async function adjustStock(tx, { storeId, productId, variantId = null, delta = 0, reservedDelta = 0, allowNegative = false }) {
+  if (!storeId) storeId = await mainStoreId(tx);
+  const row = await lockStoreStock(tx, { storeId, productId, variantId });
+  const newQty = row.quantity + delta;
+  const newRes = Math.max(0, row.reservedQuantity + reservedDelta);
+  if (!allowNegative && newQty < 0) {
+    throw httpError(`Stock insuffisant (disponible : ${row.quantity}).`);
+  }
+  if (!allowNegative && reservedDelta > 0 && newQty - newRes < 0) {
+    throw httpError(`Stock insuffisant (disponible : ${availableQty(row.quantity, row.reservedQuantity)}).`);
+  }
+  await tx.storeStock.update({ where: { id: row.id }, data: { quantity: newQty, reservedQuantity: newRes } });
+  const totalData = {};
+  if (delta) totalData.stock = { increment: delta };
+  if (reservedDelta) totalData.reservedStock = { increment: reservedDelta };
+  if (Object.keys(totalData).length) {
+    if (variantId) await tx.productVariant.update({ where: { id: variantId }, data: totalData });
+    else await tx.product.update({ where: { id: productId }, data: totalData });
+  }
+  return { storeId, quantity: newQty, reservedQuantity: newRes };
+}
 
-      const unitCost = variant?.product?.purchasePrice ?? null;
-      const totalCost = unitCost != null ? unitCost * item.quantity : null;
-      const reservedRelease = Math.min(item.quantity, variant?.reservedStock || 0);
+/** Mouvement manuel (entree, perte, ajustement...) avec trace. */
+async function applyMovement(tx, { storeId, productId, variantId = null, type, quantity, unitCost = null, reason = null, supplierId = null, reference = null, orderId = null, transferId = null, createdBy = null }) {
+  const qty = Number(quantity);
+  if (!Number.isInteger(qty) || qty <= 0) throw httpError('Quantite invalide.');
+  const delta = IN_TYPES.includes(type) ? qty : -qty;
+  const res = await adjustStock(tx, { storeId, productId, variantId, delta });
+  return tx.stockMovement.create({
+    data: {
+      storeId: res.storeId, productId, variantId: variantId || null, type, quantity: qty,
+      unitCost, totalCost: unitCost != null ? unitCost * qty : null,
+      reason, supplierId, reference, orderId, transferId, createdBy,
+    },
+  });
+}
 
-      await tx.productVariant.update({
-        where: { id: item.variantId },
-        data: {
-          stock: { decrement: item.quantity },
-          ...(reservedRelease > 0 && { reservedStock: { decrement: reservedRelease } }),
-        },
-      });
-
-      await tx.stockMovement.create({
-        data: {
-          productId: variant.productId,
-          variantId: item.variantId,
-          type: 'OUT_SALE',
-          quantity: item.quantity,
-          unitCost,
-          totalCost,
-          reason: `Vente commande`,
-          orderId,
-          reference: orderId,
-          storeId,
-          createdBy,
-        },
-      });
-    } else {
-      await tx.$queryRaw`
-        SELECT id FROM "Product" WHERE id = ${item.productId} FOR UPDATE
-      `;
-      const product = await tx.product.findUnique({ where: { id: item.productId } });
-
-      const unitCost = product?.purchasePrice ?? null;
-      const totalCost = unitCost != null ? unitCost * item.quantity : null;
-      const reservedRelease = Math.min(item.quantity, product?.reservedStock || 0);
-
-      await tx.product.update({
-        where: { id: item.productId },
-        data: {
-          stock: { decrement: item.quantity },
-          ...(reservedRelease > 0 && { reservedStock: { decrement: reservedRelease } }),
-        },
-      });
-
-      await tx.stockMovement.create({
-        data: {
-          productId: item.productId,
-          variantId: null,
-          type: 'OUT_SALE',
-          quantity: item.quantity,
-          unitCost,
-          totalCost,
-          reason: `Vente commande`,
-          orderId,
-          reference: orderId,
-          storeId,
-          createdBy,
-        },
-      });
-    }
+/** Transfert : -N source, +N destination, total inchange. */
+async function transferStock(tx, { fromStoreId, toStoreId, items, transferId, transferNumber, createdBy }) {
+  if (fromStoreId === toStoreId) throw httpError('Boutiques identiques.');
+  for (const it of items) {
+    const base = { productId: it.productId, variantId: it.variantId || null };
+    await adjustStock(tx, { ...base, storeId: fromStoreId, delta: -it.quantity });
+    await adjustStock(tx, { ...base, storeId: toStoreId, delta: it.quantity });
+    // adjustStock a modifie le total deux fois (-N puis +N) : net = 0
+    const common = { ...base, quantity: it.quantity, transferId, createdBy };
+    await tx.stockMovement.create({ data: { ...common, storeId: fromStoreId, type: 'TRANSFER_OUT', reason: `Transfert ${transferNumber} vers destination` } });
+    await tx.stockMovement.create({ data: { ...common, storeId: toStoreId, type: 'TRANSFER_IN', reason: `Transfert ${transferNumber} depuis source` } });
   }
 }
 
-async function restoreStockFromSale(tx, items, orderId, createdBy = null) {
-  for (const item of items) {
-    if (item.variantId) {
-      await tx.productVariant.update({
-        where: { id: item.variantId },
-        data: { stock: { increment: item.quantity } },
-      });
-    } else {
-      await tx.product.update({
-        where: { id: item.productId },
-        data: { stock: { increment: item.quantity } },
-      });
-    }
+async function loadItemStock(item, storeId = null) {
+  const where = { productId: item.productId, variantId: item.variantId || null, ...(storeId && { storeId }) };
+  const lines = await prisma.storeStock.findMany({ where });
+  const stock = lines.reduce((a, l) => a + l.quantity, 0);
+  const reservedStock = lines.reduce((a, l) => a + l.reservedQuantity, 0);
+  const p = await prisma.product.findUnique({ where: { id: item.productId }, select: { id: true, name: true, purchasePrice: true } });
+  if (!p) return null;
+  return { productId: p.id, productName: p.name, variantId: item.variantId || null, stock, reservedStock, purchasePrice: p.purchasePrice };
+}
 
+async function checkStock(items, storeId = null) {
+  const errors = [];
+  for (const item of items) {
+    const row = await loadItemStock(item, storeId);
+    if (!row) { errors.push(`Produit introuvable : ${item.productId}`); continue; }
+    const available = availableQty(row.stock, row.reservedStock);
+    if (available < item.quantity) errors.push(`Stock insuffisant pour ${row.productName} - disponible : ${available}`);
+  }
+  return errors;
+}
+
+async function reserveStockItems(tx, items, storeId = null) {
+  for (const item of items) {
+    await adjustStock(tx, { storeId, productId: item.productId, variantId: item.variantId || null, reservedDelta: item.quantity });
+  }
+}
+
+async function releaseReservation(tx, items, storeId = null) {
+  for (const item of items) {
+    await adjustStock(tx, { storeId, productId: item.productId, variantId: item.variantId || null, reservedDelta: -item.quantity, allowNegative: true });
+  }
+}
+
+async function fulfillStockSale(tx, items, orderId, createdBy = null, storeId = null) {
+  const sid = storeId || (await mainStoreId(tx));
+  for (const item of items) {
+    const p = await tx.product.findUnique({ where: { id: item.productId }, select: { purchasePrice: true } });
+    const unitCost = p?.purchasePrice ?? null;
+    const line = await lockStoreStock(tx, { storeId: sid, productId: item.productId, variantId: item.variantId || null });
+    const release = Math.min(item.quantity, line.reservedQuantity || 0);
+    await adjustStock(tx, { storeId: sid, productId: item.productId, variantId: item.variantId || null, delta: -item.quantity, reservedDelta: -release });
     await tx.stockMovement.create({
       data: {
-        productId: item.productId,
-        variantId: item.variantId || null,
-        type: 'RETURN_IN',
-        quantity: item.quantity,
-        reason: `Annulation / retour commande`,
-        orderId,
-        reference: orderId,
-        createdBy,
+        productId: item.productId, variantId: item.variantId || null, type: 'OUT_SALE', quantity: item.quantity,
+        unitCost, totalCost: unitCost != null ? unitCost * item.quantity : null,
+        reason: 'Vente commande', orderId, reference: orderId, storeId: sid, createdBy,
       },
     });
   }
 }
 
-/** @deprecated Utiliser fulfillStockSale dans une transaction */
-async function decrementStock(items) {
+async function restoreStockFromSale(tx, items, orderId, createdBy = null, storeId = null) {
+  let sid = storeId;
+  if (!sid && orderId) sid = (await tx.order.findUnique({ where: { id: orderId }, select: { storeId: true } }))?.storeId;
+  sid = sid || (await mainStoreId(tx));
   for (const item of items) {
-    if (item.variantId) {
-      await prisma.productVariant.update({
-        where: { id: item.variantId },
-        data: { stock: { decrement: item.quantity } },
-      });
-    } else {
-      await prisma.product.update({
-        where: { id: item.productId },
-        data: { stock: { decrement: item.quantity } },
-      });
-    }
-  }
-}
-
-/** @deprecated Utiliser restoreStockFromSale dans une transaction */
-async function incrementStock(items) {
-  for (const item of items) {
-    if (item.variantId) {
-      await prisma.productVariant.update({
-        where: { id: item.variantId },
-        data: { stock: { increment: item.quantity } },
-      });
-    } else {
-      await prisma.product.update({
-        where: { id: item.productId },
-        data: { stock: { increment: item.quantity } },
-      });
-    }
+    await adjustStock(tx, { storeId: sid, productId: item.productId, variantId: item.variantId || null, delta: item.quantity });
+    await tx.stockMovement.create({
+      data: {
+        productId: item.productId, variantId: item.variantId || null, type: 'RETURN_IN', quantity: item.quantity,
+        reason: 'Annulation / retour commande', orderId, reference: orderId, storeId: sid, createdBy,
+      },
+    });
   }
 }
 
 module.exports = {
-  availableQty,
-  checkStock,
-  reserveStockItems,
-  releaseReservation,
-  fulfillStockSale,
-  restoreStockFromSale,
-  decrementStock,
-  incrementStock,
+  availableQty, adjustStock, applyMovement, transferStock, lockStoreStock,
+  checkStock, reserveStockItems, releaseReservation, fulfillStockSale, restoreStockFromSale,
 };
