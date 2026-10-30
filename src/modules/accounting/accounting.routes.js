@@ -231,31 +231,21 @@ router.post('/stock-movements/:id/cancel', isAdmin, async (req, res) => {
     const inverseType = isIncoming ? 'OUT_LOSS' : 'IN';
     const stockDelta  = isIncoming ? -original.quantity : original.quantity;
 
-    const [cancelMovement] = await prisma.$transaction([
-      prisma.stockMovement.create({
-        data: {
-          productId:  original.productId,
-          variantId:  original.variantId  || null,
-          type:       inverseType,
-          quantity:   original.quantity,
-          unitCost:   original.unitCost   || null,
-          totalCost:  original.totalCost  || null,
-          reason:     `Annulation du mouvement #${original.id.slice(-6).toUpperCase()}`,
-          supplierId: original.supplierId || null,
-          reference:  `CANCEL:${original.id}`,
-          createdBy:  req.user.id,
-        },
-      }),
-      original.variantId
-        ? prisma.productVariant.update({
-            where: { id: original.variantId },
-            data:  { stock: { increment: stockDelta } },
-          })
-        : prisma.product.update({
-            where: { id: original.productId },
-            data:  { stock: { increment: stockDelta } },
-          }),
-    ]);
+    const cancelMovement = await prisma.$transaction(async (tx) => {
+      const inv = await applyMovement(tx, {
+        storeId:    original.storeId,
+        productId:  original.productId,
+        variantId:  original.variantId || null,
+        type:       inverseType,
+        quantity:   original.quantity,
+        unitCost:   original.unitCost || null,
+        reason:     `Annulation du mouvement #${original.id.slice(-6).toUpperCase()}`,
+        supplierId: original.supplierId || null,
+        reference:  `CANCEL:${original.id}`,
+        createdBy:  req.user.id,
+      });
+      return inv;
+    });
 
     res.json(cancelMovement);
   } catch (error) {

@@ -48,6 +48,13 @@ const check = async (name, fn) => { try { await fn(); ok++; console.log('  OK   
       const line = await prisma.storeStock.findFirst({ where: { storeId: a.id, productId: p.id, variantId: null } });
       assert.strictEqual(line.reservedQuantity, 0);
     });
+    await check('annulation : entree +3 puis mouvement inverse', async () => {
+      const before = await qty(b.id);
+      const mv = await prisma.$transaction((tx) => S.applyMovement(tx, { storeId: b.id, productId: p.id, type: 'IN', quantity: 3 }));
+      assert.strictEqual(await qty(b.id), before + 3);
+      await prisma.$transaction((tx) => S.applyMovement(tx, { storeId: mv.storeId, productId: p.id, type: 'OUT_LOSS', quantity: 3, reference: 'CANCEL:' + mv.id }));
+      assert.strictEqual(await qty(b.id), before);
+    });
   } finally {
     await prisma.stockMovement.deleteMany({ where: { productId: p.id } });
     await prisma.storeStock.deleteMany({ where: { productId: p.id } });
