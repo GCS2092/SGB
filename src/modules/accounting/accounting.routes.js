@@ -321,7 +321,11 @@ router.put('/expenses/:id', isAdmin, async (req, res) => {
   try {
     const expense = await prisma.expense.update({
       where: { id: req.params.id },
-      data:  req.body,
+      data: Object.fromEntries(
+        Object.entries(req.body)
+          .filter(([k]) => ['category', 'label', 'amount', 'date', 'supplierId', 'reference', 'notes'].includes(k))
+          .map(([k, v]) => [k, k === 'amount' ? Number(v) : k === 'date' ? new Date(v) : v])
+      ),
     });
     res.json(expense);
   } catch (error) {
