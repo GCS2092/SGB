@@ -10,7 +10,7 @@
     "db:generate": "prisma generate",
     "db:studio": "prisma studio",
     "db:seed": "prisma db seed",
-    "test": "node tests/stock.test.js && node tests/purchase.test.js && node --test tests/security.test.js tests/stock-rules.test.js"
+    "test": "node tests/stock.test.js && node tests/purchase.test.js && node --test tests/security.test.js tests/stock-rules.test.js tests/orders-validation.test.js tests/credit-notes.test.js --test-force-exit"
   },
   "prisma": {
     "seed": "node prisma/seed.js"
