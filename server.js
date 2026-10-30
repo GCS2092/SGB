@@ -189,8 +189,22 @@ cron.schedule('0 8 1 * *', async () => {
 // Démarrage du serveur
 // ─────────────────────────────────────────────────────────────────────────────
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(
     `Backend démarré sur http://localhost:${PORT}`
   );
 });
+
+// ── Arret propre et filets de securite ──
+const shutdown = (signal) => {
+  console.log(`[${signal}] arret du serveur...`);
+  server.close(async () => {
+    try { await require('./src/config/database').$disconnect(); } catch (_) { /* ignore */ }
+    process.exit(0);
+  });
+  setTimeout(() => process.exit(1), 10000).unref();
+};
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
+process.on('unhandledRejection', (reason) => console.error('[unhandledRejection]', reason));
+process.on('uncaughtException', (err) => { console.error('[uncaughtException]', err); shutdown('uncaughtException'); });

@@ -1,10 +1,10 @@
 // ============================================================
-// SonShop + SonTech — Templates Emails
+// SGB + SonTech — Templates Emails
 // Thème dynamique selon storeCode
 // ============================================================
 
-// ── Thème SonShop (défaut) ────────────────────────────────────────────────────
-const C_SONSHOP = {
+// ── Thème SGB (défaut) ────────────────────────────────────────────────────
+const C_SGB = {
   primary:   '#C8748A',
   gold:      '#C8A96E',
   navy:      '#2C2C3E',
@@ -40,11 +40,11 @@ const C_SONTECH = {
 };
 
 function getTheme(storeCode) {
-  return storeCode === 'SONTECH' ? C_SONTECH : C_SONSHOP;
+  return storeCode === 'SONTECH' ? C_SONTECH : C_SGB;
 }
 
 // ── Layout commun ─────────────────────────────────────────────────────────────
-function layout(bodyContent, preheader = '', storeName = 'SonShop', storeCode = 'SONSHOP') {
+function layout(bodyContent, preheader = '', storeName = 'SGB', storeCode = 'SGB') {
   const C = getTheme(storeCode);
   const displayName = storeName.toUpperCase();
   const [part1, part2] = displayName.startsWith('SON')
@@ -164,7 +164,7 @@ function cta(text, url, primaryColor = '#C8748A') {
   </table>`;
 }
 
-function whatsappCta(number, storeName = 'SonShop') {
+function whatsappCta(number, storeName = 'SGB') {
   if (!number) return '';
   return `
   <table cellpadding="0" cellspacing="0" style="margin:12px auto 0;">
@@ -328,7 +328,7 @@ function greeting(name, C) {
   </p>`;
 }
 
-function signature(storeName = 'SonShop', C) {
+function signature(storeName = 'SGB', C) {
   return `<p style="margin:28px 0 0;font-size:13px;color:${C.textLight};">
     À bientôt,<br/>
     <strong style="color:${C.text};">L'équipe ${storeName}</strong>
@@ -358,7 +358,7 @@ function guestInfoBanner(whatsappNumber, C) {
 }
 
 function kpiCard(emoji, label, value, subValue = '', color = '#C8748A') {
-  const C = C_SONSHOP;
+  const C = C_SGB;
   return `
   <td style="width:25%;padding:8px;" valign="top">
     <table width="100%" cellpadding="0" cellspacing="0"
@@ -380,7 +380,7 @@ function kpiCard(emoji, label, value, subValue = '', color = '#C8748A') {
 }
 
 function progressBar(label, value, max, color = '#C8748A') {
-  const C = C_SONSHOP;
+  const C = C_SGB;
   const pct = max > 0 ? Math.round((value / max) * 100) : 0;
   return `
   <tr>
@@ -408,7 +408,7 @@ function buildOrderConfirmationEmail({
   items = [], shippingCost = 0, discount = 0, storeDiscount = 0,
   tax = 0, subtotal, paymentMethod, shippingAddress,
   isGuest = false, whatsappNumber = '',
-  storeName = 'SonShop', storeCode = 'SONSHOP',
+  storeName = 'SGB', storeCode = 'SGB',
 }) {
   const C = getTheme(storeCode);
   const name   = guestName || 'cher(e) client(e)';
@@ -471,7 +471,7 @@ function buildOrderStatusEmail({
   orderNumber, customerName, status, clientUrl,
   trackingNote, isGuest = false, whatsappNumber = '',
   items = [], total, shippingAddress,
-  storeName = 'SonShop', storeCode = 'SONSHOP',
+  storeName = 'SGB', storeCode = 'SGB',
 }) {
   const C = getTheme(storeCode);
 
@@ -538,7 +538,7 @@ function buildOrderStatusEmail({
 // ============================================================
 function buildInvoiceEmail({
   invoiceNumber, orderNumber, customerName, total, clientUrl,
-  storeName = 'SonShop', storeCode = 'SONSHOP',
+  storeName = 'SGB', storeCode = 'SGB',
 }) {
   const C = getTheme(storeCode);
 
@@ -573,7 +573,7 @@ function buildInvoiceEmail({
 // ============================================================
 // 4. RÉINITIALISATION MOT DE PASSE
 // ============================================================
-function buildPasswordResetEmail({ name, resetUrl, storeName = 'SonShop', storeCode = 'SONSHOP' }) {
+function buildPasswordResetEmail({ name, resetUrl, storeName = 'SGB', storeCode = 'SGB' }) {
   const C = getTheme(storeCode);
 
   const body = `
@@ -608,7 +608,7 @@ function buildPasswordResetEmail({ name, resetUrl, storeName = 'SonShop', storeC
 // ============================================================
 // 5. PRÉCOMMANDE (article en rupture)
 // ============================================================
-function buildPreorderEmail({ name, productName, orderNumber, storeName = 'SonShop', storeCode = 'SONSHOP' }) {
+function buildPreorderEmail({ name, productName, orderNumber, storeName = 'SGB', storeCode = 'SGB' }) {
   const C = getTheme(storeCode);
 
   const body = `
@@ -645,7 +645,7 @@ function buildPreorderEmail({ name, productName, orderNumber, storeName = 'SonSh
 // ============================================================
 // 6. RAPPORT DE GESTION
 // ============================================================
-function buildReportEmail({ period, financial, orders, products, stock, expenses, storeName = 'SonShop', storeCode = 'SONSHOP' }) {
+function buildReportEmail({ period, financial, orders, products, stock, expenses, storeName = 'SGB', storeCode = 'SGB' }) {
   const C = getTheme(storeCode);
   const fmt = (n) => Number(n || 0).toLocaleString('fr-FR');
   const pct = (val, total) => total > 0 ? Math.round((val / total) * 100) : 0;
@@ -861,7 +861,7 @@ function buildReportEmail({ period, financial, orders, products, stock, expenses
 // ============================================================
 // 7. EMAIL OTP — VÉRIFICATION / RÉINITIALISATION
 // ============================================================
-function buildOtpEmail({ code, type = 'REGISTER', expiresInMinutes = 15, storeName = 'SonShop', storeCode = 'SONSHOP' }) {
+function buildOtpEmail({ code, type = 'REGISTER', expiresInMinutes = 15, storeName = 'SGB', storeCode = 'SGB' }) {
   const C = getTheme(storeCode);
 
   const isRegister = type === 'REGISTER';
@@ -928,7 +928,7 @@ function buildOtpEmail({ code, type = 'REGISTER', expiresInMinutes = 15, storeNa
 // ============================================================
 // 8. ALERTE STOCK BAS / RUPTURE — envoyée par le job quotidien
 // ============================================================
-function buildStockAlertEmail({ lowStock = [], outOfStock = [], storeName = 'SonShop', storeCode = 'SONSHOP', adminUrl = '' }) {
+function buildStockAlertEmail({ lowStock = [], outOfStock = [], storeName = 'SGB', storeCode = 'SGB', adminUrl = '' }) {
   const C = getTheme(storeCode);
 
   const outOfStockRows = outOfStock.map((p) => `
@@ -999,7 +999,7 @@ function buildStockAlertEmail({ lowStock = [], outOfStock = [], storeName = 'Son
 // ============================================================
 function buildAdminNewOrderEmail({
   orderNumber, guestName, total, items = [], shippingAddress,
-  paymentMethod, adminUrl = '', storeName = 'SonShop', storeCode = 'SONSHOP',
+  paymentMethod, adminUrl = '', storeName = 'SGB', storeCode = 'SGB',
 }) {
   const C = getTheme(storeCode);
   const addrLine = shippingAddress

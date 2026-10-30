@@ -8,7 +8,7 @@ const otplib = require('otplib');
 const QRCode = require('qrcode');
 const prisma = require('../../config/database');
 
-const APP_NAME = 'SonShop';
+const APP_NAME = 'SGB';
 
 // ─── Génère un nouveau secret TOTP + le QR code à scanner ─────────────────
 async function generateTwoFactorSecret(userId, email) {

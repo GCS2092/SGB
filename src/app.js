@@ -64,23 +64,14 @@ app.use(express.urlencoded({ extended: false }));
 app.use(requestLogger);
 app.use(apiLimiter);
 
-app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+if (process.env.NODE_ENV !== 'production') {
+  app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+}
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// ⚠️ TEMPORAIRE — route de diagnostic latence DB, à retirer après test
-app.get('/api/debug/db-latency', async (req, res) => {
-  try {
-    const start = Date.now();
-    await prisma.$queryRaw`SELECT 1`;
-    const duration = Date.now() - start;
-    res.json({ latencyMs: duration });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
 
 app.get('/', (req, res) => {
   res.json({

@@ -101,7 +101,7 @@ async function completeRegistration({ email, password, firstName, lastName, phon
     throw error;
   }
 
-  const hashedPassword = await bcrypt.hash(password, 10);
+  const hashedPassword = await bcrypt.hash(password, 12);
   const user = await prisma.user.create({
     data: {
       email,
@@ -130,7 +130,7 @@ async function register({ email, password, firstName, lastName, phone }) {
     throw error;
   }
 
-  const hashedPassword = await bcrypt.hash(password, 10);
+  const hashedPassword = await bcrypt.hash(password, 12);
   const user = await prisma.user.create({
     data: { email, password: hashedPassword, firstName, lastName, phone },
   });

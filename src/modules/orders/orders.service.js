@@ -1,4 +1,4 @@
-﻿const prisma = require('../../config/database');
+const prisma = require('../../config/database');
 const { sendEmail } = require('../../config/email');
 const { buildOrderConfirmationEmail, buildOrderStatusEmail, buildAdminNewOrderEmail } = require('../../utils/email.utils');
 const { generateOrderNumber } = require('../../utils/order.utils');
@@ -470,8 +470,8 @@ async function changeOrderStatus(orderId, payload, adminUser, ip) {
       status: order.status,
       clientUrl: FRONTEND_URL,
       isGuest: !order.userId,
-      storeName: order.store?.name || 'SonShop',
-      storeCode: order.store?.code || 'SONSHOP',
+      storeName: order.store?.name || 'SGB',
+      storeCode: order.store?.code || 'SGB',
     });
 
     let attachments = [];

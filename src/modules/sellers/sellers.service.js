@@ -292,7 +292,7 @@ async function createSeller(data) {
     throw error;
   }
 
-  const hashedPassword = await bcrypt.hash(password, 10);
+  const hashedPassword = await bcrypt.hash(password, 12);
 
   const seller = await prisma.user.create({
     data: {

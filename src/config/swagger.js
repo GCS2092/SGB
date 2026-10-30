@@ -4,9 +4,9 @@ const options = {
   definition: {
     openapi: '3.0.0',
     info: {
-      title: 'SonShop API',
+      title: 'SGB API',
       version: '1.0.0',
-      description: 'Documentation de l\'API SonShop',
+      description: 'Documentation de l\'API SGB',
     },
     servers: [{ url: 'http://localhost:5000' }],
     components: {

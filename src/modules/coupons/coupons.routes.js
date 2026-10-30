@@ -32,7 +32,7 @@ router.get('/public/active', couponsController.getPublicCoupons);
  *       content:
  *         application/json:
  *           example:
- *             code: URBAN10
+ *             code: WELCOME10
  *             orderAmount: 25000
  *     responses:
  *       200:

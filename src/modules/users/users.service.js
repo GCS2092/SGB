@@ -58,7 +58,7 @@ async function updateUser(id, data) {
   const updateData = { ...data };
 
   if (data.password) {
-    updateData.password = await bcrypt.hash(data.password, 10);
+    updateData.password = await bcrypt.hash(data.password, 12);
   }
 
   if (data.email) {
@@ -86,7 +86,7 @@ async function createStaffUser({ email, password, firstName, lastName, phone, st
     throw error;
   }
 
-  const hashedPassword = await bcrypt.hash(password, 10);
+  const hashedPassword = await bcrypt.hash(password, 12);
 
   const result = await prisma.$transaction(async (tx) => {
     const user = await tx.user.create({

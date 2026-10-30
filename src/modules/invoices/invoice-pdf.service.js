@@ -1,11 +1,11 @@
-﻿const path = require('path');
+const path = require('path');
 const PDFDocument = require('pdfkit');
 const { getSettings } = require('../settings/settings.service');
 const prisma = require('../../config/database');
 
 const LOGO_PATH = path.join(__dirname, '../../assets/logo.png');
 
-const PALETTE_SONSHOP = {
+const PALETTE_SGB = {
   primary:   '#1a1a2e',
   accent:    '#c8a96e',
   accentDk:  '#a8894e',
@@ -38,11 +38,11 @@ const PALETTE_SONTECH = {
 };
 
 function getPalette(store) {
-  if (!store) return PALETTE_SONSHOP;
+  if (!store) return PALETTE_SGB;
   const name = (store.name || '').toLowerCase();
   const code = (store.code || '').toLowerCase();
   if (name.includes('tech') || code.includes('tech')) return PALETTE_SONTECH;
-  return PALETTE_SONSHOP;
+  return PALETTE_SGB;
 }
 
 function fcfa(amount) {
@@ -106,7 +106,7 @@ async function buildInvoicePdf(invoice) {
   const C = getPalette(store);
 
   const settings  = await getSettings(invoice.storeId);
-  const company   = settings.company_name    || store?.name || 'SonShop';
+  const company   = settings.company_name    || store?.name || 'SGB';
   const address   = settings.company_address || 'Dakar, Senegal';
   const phone     = settings.company_phone   || settings.whatsapp_number || '';
   const email     = settings.company_email   || '';

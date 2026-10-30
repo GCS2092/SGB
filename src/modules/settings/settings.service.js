@@ -1,8 +1,8 @@
-﻿const prisma = require('../../config/database');
+const prisma = require('../../config/database');
 
 const DEFAULT_SETTINGS = {
   // Entreprise
-  company_name: 'SonShop',
+  company_name: 'SGB',
   company_address: '',
   company_phone: '',
   company_email: '',

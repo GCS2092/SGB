@@ -26,7 +26,7 @@ async function checkLowStockAndNotify() {
   }
 
   const settings = await getSettings();
-  const storeName = settings.company_name || 'SonShop';
+  const storeName = settings.company_name || 'SGB';
 
   const { subject, html } = buildStockAlertEmail({
     outOfStock: outOfStock.map((p) => ({

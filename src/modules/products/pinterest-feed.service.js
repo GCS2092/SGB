@@ -1,6 +1,6 @@
 const prisma = require('../../config/database');
 
-const SITE_URL = 'https://www.sonshop.beauty';
+const SITE_URL = (process.env.SITE_URL || 'http://localhost:5173');
 const CURRENCY = 'XOF';
 
 // Taxonomie Google Product Category (GPC) — https://support.google.com/merchants/answer/6324436
@@ -63,7 +63,7 @@ function buildItemXml(product) {
     <g:price>${price}</g:price>
     <g:availability>${availability}</g:availability>
     <g:condition>new</g:condition>
-    <g:brand><![CDATA[SonShop]]></g:brand>
+    <g:brand><![CDATA[SGB]]></g:brand>
     <g:google_product_category><![CDATA[${googleProductCategory}]]></g:google_product_category>
     ${product.category ? `<g:product_type><![CDATA[${escapeCdata(product.category.name)}]]></g:product_type>` : ''}
   </item>`;
@@ -84,9 +84,9 @@ async function generatePinterestFeed() {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0" xmlns:g="http://base.google.com/ns/1.0">
 <channel>
-  <title>SonShop - Catalogue produits</title>
+  <title>SGB - Catalogue produits</title>
   <link>${SITE_URL}</link>
-  <description>Catalogue produits SonShop pour Pinterest Catalogs</description>
+  <description>Catalogue produits SGB pour Pinterest Catalogs</description>
   ${items}
 </channel>
 </rss>`;
