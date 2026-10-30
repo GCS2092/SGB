@@ -11,6 +11,11 @@ async function createCreditNote(req, res, next) {
       return res.status(400).json({ message: 'Facture et montant requis.' });
     }
 
+    const amountNum = Number(amount);
+    if (!Number.isInteger(amountNum) || amountNum <= 0) {
+      return res.status(400).json({ message: 'Le montant doit être un entier positif.' });
+    }
+
     const creditNote = await prisma.$transaction(async (tx) => {
       const invoice = await tx.invoice.findUnique({
         where: { id: invoiceId },
@@ -24,6 +29,17 @@ async function createCreditNote(req, res, next) {
       }
       if (invoice.status === 'CANCELLED') {
         const error = new Error('Impossible d\'émettre un avoir sur une facture annulée.');
+        error.status = 400;
+        throw error;
+      }
+
+      if (req.storeIds?.length && !req.storeIds.includes(invoice.storeId)) {
+        const error = new Error('Accès refusé à cette boutique.');
+        error.status = 403;
+        throw error;
+      }
+      if (amountNum > invoice.total) {
+        const error = new Error(`Le montant dépasse le total de la facture (${invoice.total}).`);
         error.status = 400;
         throw error;
       }
