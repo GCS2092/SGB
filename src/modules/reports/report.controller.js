@@ -6,12 +6,10 @@ const { getSettings } = require('../settings/settings.service');
 
 async function downloadReport(req, res) {
   try {
-    console.log('📥 [downloadReport] query =', req.query);
 
     const { storeId, from, to } = req.query;
 
     if (!storeId || !from || !to) {
-      console.log('❌ [downloadReport] missing params');
       return res.status(400).json({
         error: 'storeId, from et to sont requis.'
       });
@@ -19,11 +17,7 @@ async function downloadReport(req, res) {
 
     const data = await collectReportData(storeId, from, to);
 
-    console.log('📊 [downloadReport] data loaded');
-
     const pdfBuffer = await buildReportPdf(data);
-
-    console.log('📄 [downloadReport] PDF generated');
 
     const filename = `rapport-${storeId}-${from}-${to}.pdf`;
 
@@ -31,8 +25,6 @@ async function downloadReport(req, res) {
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
 
     res.send(pdfBuffer);
-
-    console.log('✅ [downloadReport] success');
   } catch (err) {
     console.error('❌ Erreur downloadReport:', err);
     res.status(500).json({
@@ -43,12 +35,10 @@ async function downloadReport(req, res) {
 
 async function sendReportByEmail(req, res) {
   try {
-    console.log('📨 [sendReportByEmail] body =', req.body);
 
     const { storeId, from, to } = req.body;
 
     if (!storeId || !from || !to) {
-      console.log('❌ missing body params');
       return res.status(400).json({
         error: 'storeId, from et to sont requis.'
       });
@@ -59,10 +49,7 @@ async function sendReportByEmail(req, res) {
 
     const recipient = req.body?.email || process.env.ADMIN_EMAIL;
 
-    console.log('📧 recipient resolved =', recipient);
-
     if (!recipient) {
-      console.log('❌ no recipient found');
       return res.status(400).json({
         error: 'Aucun email destinataire fourni.'
       });
@@ -70,11 +57,7 @@ async function sendReportByEmail(req, res) {
 
     const data = await collectReportData(storeId, from, to);
 
-    console.log('📊 report data loaded');
-
     const pdfBuffer = await buildReportPdf(data);
-
-    console.log('📄 pdf generated');
 
     const pdfBase64 = pdfBuffer.toString('base64');
     const filename = `rapport-${storeId}-${from}-${to}.pdf`;
@@ -88,8 +71,6 @@ async function sendReportByEmail(req, res) {
       expenses: data.expenses,
       storeName,
     });
-
-    console.log('📧 sending email to:', recipient);
 
     // sendEmail relance maintenant une erreur explicite si Brevo refuse,
     // donc on l'attrape ici pour renvoyer un message utile au frontend
@@ -105,8 +86,6 @@ async function sendReportByEmail(req, res) {
         },
       ],
     });
-
-    console.log(`✅ Rapport envoyé à ${recipient} (${from} → ${to})`);
 
     res.json({
       message: `Rapport envoyé à ${recipient}`
