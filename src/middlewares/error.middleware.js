@@ -1,4 +1,5 @@
 const { mapPrismaError } = require('../utils/prisma-error.utils');
+const logger = require('../config/logger');
 
 function errorHandler(err, req, res, next) {
   const mapped = mapPrismaError(err) || err;
@@ -9,7 +10,7 @@ function errorHandler(err, req, res, next) {
       : mapped.message || 'Erreur interne du serveur';
 
   if (status >= 500) {
-    console.error(err);
+    logger.error({ err, url: req.originalUrl }, 'Erreur serveur');
   }
 
   res.status(status).json({

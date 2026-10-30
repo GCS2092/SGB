@@ -36,8 +36,8 @@ async function createStaffUser(req, res, next) {
     if (!email?.trim() || !password || !firstName?.trim() || !lastName?.trim()) {
       return res.status(400).json({ message: 'Email, mot de passe, prénom et nom sont requis.' });
     }
-    if (password.length < 6) {
-      return res.status(400).json({ message: 'Le mot de passe doit contenir au moins 6 caractères.' });
+    if (password.length < 10) {
+      return res.status(400).json({ message: 'Le mot de passe doit contenir au moins 10 caractères.' });
     }
 
     const user = await usersService.createStaffUser({
@@ -61,8 +61,8 @@ async function resetUserPassword(req, res, next) {
     const { id } = req.params;
     const { password } = req.body;
 
-    if (!password || password.length < 6) {
-      return res.status(400).json({ message: 'Le mot de passe doit contenir au moins 6 caractères.' });
+    if (!password || password.length < 10) {
+      return res.status(400).json({ message: 'Le mot de passe doit contenir au moins 10 caractères.' });
     }
 
     await usersService.updateUser(id, { password });
