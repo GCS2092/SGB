@@ -1,3 +1,5 @@
+require('dotenv').config();
+require('./src/config/env');
 const app = require('./src/app');
 const cron = require('node-cron');
 
@@ -200,7 +202,7 @@ const shutdown = (signal) => {
   console.log(`[${signal}] arret du serveur...`);
   server.close(async () => {
     try { await require('./src/config/database').$disconnect(); } catch (_) { /* ignore */ }
-    process.exit(0);
+    process.exit(signal === 'uncaughtException' ? 1 : 0);
   });
   setTimeout(() => process.exit(1), 10000).unref();
 };

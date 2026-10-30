@@ -133,8 +133,6 @@ function drawKpiCards(doc, kpis) {
 
 async function buildReportPdf(data) {
   const settings = await getSettings();
-  // ⚠️ FIX : le fallback pointait vers "SGB" (mauvais projet/copier-coller).
-  // Ta boutique s'appelle SGB — c'est le vrai fallback à utiliser si
   // settings.company_name n'est pas configuré en base.
   const companyName    = settings.company_name    || 'SGB';
   const companyAddress = settings.company_address || '';
@@ -152,9 +150,6 @@ async function buildReportPdf(data) {
     const headerH = 86;
     doc.rect(0, 0, doc.page.width, headerH).fill(C.navy);
 
-    // ⚠️ FIX : le nom "URBAN"/"BEAUTY" était codé en dur ici, donc le PDF
-    // affichait toujours "SGB" peu importe la vraie boutique.
-    // On utilise maintenant companyName dynamiquement (ex: "SGB").
     doc.fillColor(C.white).font('Helvetica-Bold').fontSize(20)
       .text(companyName.toUpperCase(), PAGE_MARGIN, 26);
     doc.fillColor('#aaaaaa').font('Helvetica').fontSize(7.5)
