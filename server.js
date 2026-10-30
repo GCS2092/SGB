@@ -199,6 +199,7 @@ const server = app.listen(PORT, () => {
 
 // ── Arret propre et filets de securite ──
 const shutdown = (signal) => {
+  const code = signal === 'uncaughtException' ? 1 : 0;
   console.log(`[${signal}] arret du serveur...`);
   server.close(async () => {
     try { await require('./src/config/database').$disconnect(); } catch (_) { /* ignore */ }
