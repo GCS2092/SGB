@@ -1,0 +1,710 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String         @id @default(cuid())
+  email         String         @unique
+  password      String?
+  googleId      String?        @unique
+  firstName     String
+  lastName      String
+  phone         String?
+  role          Role           @default(CUSTOMER)
+  refreshToken  String?
+  twoFactorSecret      String?
+  twoFactorEnabled     Boolean  @default(false)
+  twoFactorBackupCodes String?  @db.Text
+  isActive      Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  addresses     Address[]
+  carts         Cart[]
+  notifications Notification[]
+  orders        Order[]
+  reviews       Review[]
+  stockAlerts   StockAlert[]
+  userStores    UserStore[]
+  wishlist      Wishlist[]
+  sellerProducts Product[]      @relation("SellerProducts")
+  uploadedImages UploadedImage[]
+  // Champs boutique vendeur
+  storeName     String?        @db.Text
+  storeDescription String?      @db.Text
+  storeLogo     String?
+  storeContact  String?
+}
+
+model Store {
+  id               String            @id @default(cuid())
+  code             String            @unique
+  name             String
+  address          String?
+  phone            String?
+  isMain           Boolean           @default(false)
+  isActive         Boolean           @default(true)
+  taxRate          Float             @default(0)
+  discountRate     Float             @default(0)
+  currency         String            @default("XOF")
+  exchangeRate     Float             @default(1)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  auditLogs        AuditLog[]
+  coupons          Coupon[]
+  creditNotes      CreditNote[]
+  expenses         Expense[]
+  invoices         Invoice[]
+  invoiceSequences InvoiceSequence[]
+  orders           Order[]
+  products         Product[]
+  stockMovements   StockMovement[]
+  transfersFrom    StockTransfer[]   @relation("TransferFrom")
+  transfersTo      StockTransfer[]   @relation("TransferTo")
+  userStores       UserStore[]
+}
+
+model UserStore {
+  id        String         @id @default(cuid())
+  userId    String
+  storeId   String
+  role      StoreStaffRole @default(MANAGER)
+  createdAt DateTime       @default(now())
+  store     Store          @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, storeId])
+  @@index([storeId])
+}
+
+model Address {
+  id        String   @id @default(cuid())
+  userId    String
+  label     String
+  fullName  String
+  phone     String
+  street    String
+  city      String
+  country   String
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+}
+
+model Category {
+  id        String    @id @default(cuid())
+  name      String
+  slug      String    @unique
+  imageUrl  String?   @db.Text
+  isActive  Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  products  Product[]
+}
+
+model Product {
+  id                 String              @id @default(cuid())
+  name               String
+  slug               String              @unique
+  description String @db.Text
+  price              Int
+  comparePrice       Int?
+  stock              Int
+  reservedStock      Int                 @default(0)
+  isActive           Boolean             @default(true)
+  isFeatured         Boolean             @default(false)
+  purchasePrice      Int?
+  lowStockAlert      Int                 @default(5)
+  overstockAlert     Int?
+  categoryId         String
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  variantDisplayMode VariantDisplayMode  @default(SIZE_FIRST)
+  storeId            String?
+  supplierId         String?              // ← doit être présent
+  sellerId           String?              // ← NOUVEAU
+  status             ProductStatus       @default(DRAFT)  // ← NOUVEAU
+  cartItems          CartItem[]
+  orderItems         OrderItem[]
+  category           Category            @relation(fields: [categoryId], references: [id])
+  store              Store?              @relation(fields: [storeId], references: [id])
+  supplier           Supplier?            @relation(fields: [supplierId], references: [id])  // ← doit être présent
+  seller             User?                @relation("SellerProducts", fields: [sellerId], references: [id])  // ← NOUVEAU
+  images             ProductImage[]
+  variants           ProductVariant[]
+  reviews            Review[]
+  stockAlerts        StockAlert[]
+  stockMovements     StockMovement[]
+  transferItems      StockTransferItem[]
+  wishlist           Wishlist[]
+
+  @@index([categoryId])
+  @@index([storeId])
+  @@index([supplierId])  // ← doit être présent
+  @@index([sellerId])  // ← NOUVEAU
+  @@index([status])  // ← NOUVEAU
+}
+
+model ProductImage {
+  id        String  @id @default(cuid())
+  productId String
+  url       String
+  publicId  String
+  position  Int     @default(0)
+  isMain    Boolean @default(false)
+  color     String?
+  product   Product @relation(fields: [productId], references: [id])
+
+  @@index([productId])
+}
+
+model ProductVariant {
+  id             String              @id @default(cuid())
+  productId      String
+  size           String
+  color          String
+  stock          Int
+  reservedStock  Int                 @default(0)
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  cartItems      CartItem[]
+  orderItems     OrderItem[]
+  product        Product             @relation(fields: [productId], references: [id])
+  stockAlerts    StockAlert[]
+  stockMovements StockMovement[]
+  transferItems  StockTransferItem[]
+
+  @@unique([productId, size, color])
+}
+
+model Wishlist {
+  id        String   @id @default(cuid())
+  userId    String
+  productId String
+  createdAt DateTime @default(now())
+  product   Product  @relation(fields: [productId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@unique([userId, productId])
+  @@index([productId])
+}
+
+model Review {
+  id        String   @id @default(cuid())
+  userId    String
+  productId String
+  rating    Int
+  comment   String?
+  isVisible Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  product   Product  @relation(fields: [productId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@unique([userId, productId])
+  @@index([productId])
+}
+
+model Cart {
+  id          String     @id @default(cuid())
+  userId      String?
+  anonymousId String?    @unique
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  user        User?      @relation(fields: [userId], references: [id])
+  items       CartItem[]
+
+  @@index([userId])
+}
+
+model CartItem {
+  id        String          @id @default(cuid())
+  cartId    String
+  productId String
+  variantId String?
+  quantity  Int             @default(1)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  cart      Cart            @relation(fields: [cartId], references: [id])
+  product   Product         @relation(fields: [productId], references: [id])
+  variant   ProductVariant? @relation(fields: [variantId], references: [id])
+
+  @@index([cartId])
+  @@index([productId])
+  @@index([variantId])
+}
+
+model Coupon {
+  id             String       @id @default(cuid())
+  code           String       @unique
+  type           DiscountType
+  value          Int
+  minOrderAmount Int?
+  maxUses        Int?
+  usedCount      Int          @default(0)
+  isActive       Boolean      @default(true)
+  expiresAt      DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  storeId        String?
+  store          Store?       @relation(fields: [storeId], references: [id])
+  orders         Order[]
+
+  @@index([storeId])
+}
+
+model Order {
+  id                   String               @id @default(cuid())
+  orderNumber          String               @unique
+  storeId              String
+  userId               String?
+  guestEmail           String?
+  guestPhone           String?
+  guestName            String?
+  status               OrderStatus          @default(PENDING)
+  paymentMethod        PaymentMethod
+  paymentStatus        PaymentStatus        @default(PENDING)
+  subtotal             Int
+  shippingCost         Int
+  discount             Int                  @default(0)
+  storeDiscount        Int                  @default(0)
+  total                Int
+  shippingAddress      Json
+  destination          String?
+  notes                String?
+  attribution          Json?
+  metaPurchaseEventId  String?              @unique
+  metaPurchaseSentAt   DateTime?
+  metaPurchaseLastError String?
+  reservationExpiresAt DateTime?
+  couponId             String?
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+  invoice              Invoice?
+  coupon               Coupon?              @relation(fields: [couponId], references: [id])
+  store                Store                @relation(fields: [storeId], references: [id])
+  user                 User?                @relation(fields: [userId], references: [id])
+  items                OrderItem[]
+  statusHistory        OrderStatusHistory[]
+  tracking             OrderTracking[]
+  payments             Payment[]
+  confirmationEmailStatus String?  @default("PENDING") // PENDING | SENT | FAILED
+  confirmationEmailError  String?  @db.Text
+  @@index([storeId])
+  @@index([status, reservationExpiresAt])
+  @@index([couponId])
+  @@index([userId])
+}
+
+model OrderStatusHistory {
+  id         String       @id @default(cuid())
+  orderId    String
+  fromStatus OrderStatus?
+  toStatus   OrderStatus
+  message    String?
+  reason     String?
+  changedBy  String?
+  createdAt  DateTime     @default(now())
+  order      Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+}
+
+model OrderItem {
+  id           String          @id @default(cuid())
+  orderId      String
+  productId    String
+  variantId    String?
+  productName  String
+  variantLabel String?
+  price        Int
+  quantity     Int
+  subtotal     Int
+  order        Order           @relation(fields: [orderId], references: [id])
+  product      Product         @relation(fields: [productId], references: [id])
+  variant      ProductVariant? @relation(fields: [variantId], references: [id])
+
+  @@index([orderId])
+  @@index([productId])
+  @@index([variantId])
+}
+
+model OrderTracking {
+  id        String      @id @default(cuid())
+  orderId   String
+  status    OrderStatus
+  message   String
+  location  String?
+  createdAt DateTime    @default(now())
+  order     Order       @relation(fields: [orderId], references: [id])
+
+  @@index([orderId])
+}
+
+model Invoice {
+  id            String        @id @default(cuid())
+  invoiceNumber String        @unique
+  storeId       String
+  orderId       String        @unique
+  subtotal      Int
+  shippingCost  Int           @default(0)
+  discount      Int           @default(0)
+  storeDiscount Int           @default(0)
+  tax           Int           @default(0)
+  total         Int
+  status        InvoiceStatus @default(GENERATED)
+  issuedAt      DateTime      @default(now())
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  creditNotes   CreditNote[]
+  order         Order         @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  store         Store         @relation(fields: [storeId], references: [id])
+
+  @@index([storeId])
+}
+
+model InvoiceSequence {
+  storeId    String
+  year       Int
+  lastNumber Int    @default(0)
+  store      Store  @relation(fields: [storeId], references: [id])
+
+  @@id([storeId, year])
+}
+
+model CreditNote {
+  id               String           @id @default(cuid())
+  creditNoteNumber String           @unique
+  invoiceId        String
+  storeId          String
+  amount           Int
+  reason           String?
+  status           CreditNoteStatus @default(ISSUED)
+  createdBy        String?
+  createdAt        DateTime         @default(now())
+  invoice          Invoice          @relation(fields: [invoiceId], references: [id])
+  store            Store            @relation(fields: [storeId], references: [id])
+
+  @@index([storeId])
+  @@index([invoiceId])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  storeId    String?
+  action     String
+  module     String
+  entityId   String?
+  entityType String?
+  oldValue   Json?
+  newValue   Json?
+  ip         String?
+  createdAt  DateTime @default(now())
+  store      Store?   @relation(fields: [storeId], references: [id])
+
+  @@index([module, createdAt])
+  @@index([userId])
+  @@index([storeId])
+}
+
+model Payment {
+  id      String        @id @default(cuid())
+  orderId String
+  method  PaymentMethod
+  status  PaymentStatus @default(PENDING)
+  amount  Int
+
+  // Identifiant généré par notre boutique
+  merchantTransactionId String?
+
+  // Identifiant généré par CinetPay
+  transactionId String?
+
+  momoNumber String?
+
+  // Token utilisé pour sécuriser le webhook CinetPay
+  notifyToken String?
+
+  paidAt    DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Restrict)
+
+  @@index([orderId])
+  @@index([merchantTransactionId])
+  @@index([transactionId])
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  type      NotificationType
+  title     String
+  message   String
+  isRead    Boolean          @default(false)
+  link      String?
+  createdAt DateTime         @default(now())
+  user      User             @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+}
+
+model Setting {
+  id        Int      @id @default(autoincrement())
+  key       String   @unique
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+model Supplier {
+  id           String          @id @default(cuid())
+  name         String
+  email        String?
+  phone        String?
+  address      String?
+  isActive     Boolean         @default(true)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  expenses     Expense[]
+  stockEntries StockMovement[]
+  products     Product[] 
+}
+
+model StockMovement {
+  id         String            @id @default(cuid())
+  storeId    String?
+  productId  String
+  variantId  String?
+  type       StockMovementType
+  quantity   Int
+  unitCost   Int?
+  totalCost  Int?
+  reason     String?
+  supplierId String?
+  reference  String?
+  orderId    String?
+  transferId String?
+  createdBy  String?
+  createdAt  DateTime          @default(now())
+  product    Product           @relation(fields: [productId], references: [id])
+  store      Store?            @relation(fields: [storeId], references: [id])
+  supplier   Supplier?         @relation(fields: [supplierId], references: [id])
+  variant    ProductVariant?   @relation(fields: [variantId], references: [id])
+
+  @@index([storeId])
+  @@index([productId])
+  @@index([supplierId])
+  @@index([variantId])
+}
+
+model Expense {
+  id         String          @id @default(cuid())
+  storeId    String?
+  category   ExpenseCategory
+  label      String
+  amount     Int
+  date       DateTime
+  supplierId String?
+  reference  String?
+  notes      String?
+  createdBy  String?
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+  store      Store?          @relation(fields: [storeId], references: [id])
+  supplier   Supplier?       @relation(fields: [supplierId], references: [id])
+
+  @@index([storeId])
+  @@index([supplierId])
+}
+
+model StockTransfer {
+  id             String              @id @default(cuid())
+  transferNumber String              @unique
+  fromStoreId    String
+  toStoreId      String
+  status         TransferStatus      @default(PENDING)
+  notes          String?
+  validatedBy    String?
+  validatedAt    DateTime?
+  createdBy      String?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  fromStore      Store               @relation("TransferFrom", fields: [fromStoreId], references: [id])
+  toStore        Store               @relation("TransferTo", fields: [toStoreId], references: [id])
+  items          StockTransferItem[]
+
+  @@index([fromStoreId])
+  @@index([toStoreId])
+}
+
+model StockTransferItem {
+  id         String          @id @default(cuid())
+  transferId String
+  productId  String
+  variantId  String?
+  quantity   Int
+  product    Product         @relation(fields: [productId], references: [id])
+  transfer   StockTransfer   @relation(fields: [transferId], references: [id], onDelete: Cascade)
+  variant    ProductVariant? @relation(fields: [variantId], references: [id])
+
+  @@index([productId])
+  @@index([transferId])
+  @@index([variantId])
+}
+
+model OtpCode {
+  id        String    @id @default(cuid())
+  email     String
+  code      String
+  type      OtpType   @default(REGISTER)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([email, type])
+}
+
+model StockAlert {
+  id         String          @id @default(cuid())
+  userId     String?
+  email      String?
+  productId  String
+  variantId  String?
+  notifiedAt DateTime?
+  createdAt  DateTime        @default(now())
+  product    Product         @relation(fields: [productId], references: [id])
+  user       User?           @relation(fields: [userId], references: [id])
+  variant    ProductVariant? @relation(fields: [variantId], references: [id])
+
+  @@index([productId, variantId, notifiedAt])
+  @@index([userId])
+  @@index([variantId])
+}
+
+enum Role {
+  CUSTOMER
+  SELLER
+  STAFF
+  ADMIN
+}
+
+enum OrderStatus {
+  DRAFT
+  PENDING
+  CONFIRMED
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  CASH_ON_DELIVERY
+  MOBILE_MONEY
+}
+
+enum PaymentStatus {
+  PENDING
+  PARTIAL
+  PAID
+  REJECTED
+}
+
+enum DiscountType {
+  PERCENTAGE
+  FIXED
+}
+
+enum NotificationType {
+  ORDER_CONFIRMED
+  ORDER_SHIPPED
+  ORDER_DELIVERED
+  ORDER_CANCELLED
+  PAYMENT_RECEIVED
+  PROMO
+  NEW_ORDER
+}
+
+enum StockMovementType {
+  IN
+  OUT_SALE
+  OUT_LOSS
+  OUT_RETURN
+  ADJUSTMENT
+  RETURN_IN
+  TRANSFER_OUT
+  TRANSFER_IN
+}
+
+enum ExpenseCategory {
+  STOCK_PURCHASE
+  SHIPPING
+  MARKETING
+  PACKAGING
+  SALARY
+  RENT
+  UTILITIES
+  OTHER
+}
+
+enum InvoiceStatus {
+  GENERATED
+  SENT
+  PAID
+  CANCELLED
+}
+
+enum StoreStaffRole {
+  MANAGER
+  ACCOUNTANT
+  COMMERCIAL
+  WAREHOUSE
+  DELIVERY
+}
+
+enum TransferStatus {
+  PENDING
+  VALIDATED
+  CANCELLED
+}
+
+enum CreditNoteStatus {
+  ISSUED
+  APPLIED
+  CANCELLED
+}
+
+enum VariantDisplayMode {
+  SIZE_FIRST
+  COLOR_FIRST
+}
+
+enum OtpType {
+  REGISTER
+  RESET_PASSWORD
+}
+
+enum ProductStatus {
+  DRAFT
+  PUBLISHED
+  OUT_OF_STOCK
+}
+model UploadedImage {
+  id         String   @id @default(cuid())
+  publicId   String   @unique
+  url        String
+  uploadedBy String
+  createdAt  DateTime @default(now())
+  uploader   User     @relation(fields: [uploadedBy], references: [id])
+
+  @@index([uploadedBy])
+}
