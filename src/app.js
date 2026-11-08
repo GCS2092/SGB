@@ -101,14 +101,18 @@ app.use('/api/admin/accounting', accountingRoutes);
 app.use('/api/admin/audit', auditRoutes);
 app.use('/api/admin/invoices', invoicesRoutes);
 app.use('/api/admin/stores', authenticate, storesRoutes);
+app.use('/api/admin/stock-transfers', require('./modules/stock-transfers/stock-transfers.flow.routes'));
 app.use('/api/admin/stock-transfers', stockTransfersRoutes);
 app.use('/api/admin/purchase-orders', require('./modules/purchase-orders/purchase-orders.routes'));
 app.use('/api/admin/inventory', require('./modules/inventory/inventory.routes'));
 app.use('/api/admin/credit-notes', creditNotesRoutes);
+app.use('/api/admin/replenishment', require('./modules/replenishment/replenishment.routes'));
 app.use('/api/admin/reports', reportRoutes);
 app.use('/api/sellers', sellersRoutes.router);
 app.use('/api/admin/sellers', sellersRoutes.adminRouter);
 
 app.use(errorHandler);
+
+if (process.env.NODE_ENV !== 'test') require('./modules/replenishment/replenishment.service').startLowStockJob();
 
 module.exports = app;

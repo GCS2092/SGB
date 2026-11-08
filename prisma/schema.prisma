@@ -458,6 +458,11 @@ model Expense {
 }
 
 model StockTransfer {
+  shippedBy    String?
+  shippedAt    DateTime?
+  receivedBy   String?
+  receivedAt   DateTime?
+  receiveNotes String?
   id             String              @id @default(cuid())
   transferNumber String              @unique
   fromStoreId    String
@@ -478,6 +483,8 @@ model StockTransfer {
 }
 
 model StockTransferItem {
+  quantityReceived Int?
+  receiveNote       String?
   id         String          @id @default(cuid())
   transferId String
   productId  String
@@ -544,6 +551,7 @@ enum DiscountType {
 }
 
 enum NotificationType {
+  LOW_STOCK
   ORDER_CONFIRMED
   ORDER_SHIPPED
   ORDER_DELIVERED
@@ -559,6 +567,7 @@ enum StockMovementType {
   OUT_LOSS
   OUT_RETURN
   ADJUSTMENT
+  ADJUSTMENT_OUT
   RETURN_IN
   TRANSFER_OUT
   TRANSFER_IN
@@ -591,6 +600,8 @@ enum StoreStaffRole {
 }
 
 enum TransferStatus {
+  SHIPPED
+  RECEIVED
   PENDING
   VALIDATED
   CANCELLED

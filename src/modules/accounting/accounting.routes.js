@@ -8,6 +8,7 @@ const { applyStoreIdToWhere } = require('../../utils/store-scope.utils');
 const { buildProductStoreFilter } = require('../stores/store.service');
 
 const router = express.Router();
+router.use(require('./stock-movements.routes')); // nouvelles routes mouvements
 
 // GET /api/admin/accounting/dashboard
 router.get('/dashboard', isAdmin, async (req, res) => {
@@ -31,7 +32,7 @@ router.get('/dashboard', isAdmin, async (req, res) => {
       endDate   = new Date();
     }
 
-    const [revenueResult, cogsResult, expensesResult, expensesByCategory, products] = await Promise.all([
+    const [revenueResult, cogsResult, expensesResult, expensesByCategory, productsRaw] = await Promise.all([
       prisma.order.aggregate({
         where: applyStoreIdToWhere({ paymentStatus: 'PAID', createdAt: { gte: startDate, lte: endDate } }, storeId),
         _sum: { total: true },
@@ -63,9 +64,22 @@ router.get('/dashboard', isAdmin, async (req, res) => {
           price: true,
           name: true,
           lowStockAlert: true,
+          storeStocks: { select: { storeId: true, quantity: true, reservedQuantity: true } },
         },
       }),
     ]);
+
+    // Stock reel par boutique : Product.stock ignore les variantes
+    const products = productsRaw.map((p) => {
+      const all = p.storeStocks || [];
+      const mine = storeId ? all.filter((s) => s.storeId === storeId) : all;
+      const hasRows = all.length > 0;
+      return {
+        id: p.id, name: p.name, price: p.price, purchasePrice: p.purchasePrice, lowStockAlert: p.lowStockAlert,
+        stock: hasRows ? mine.reduce((a, s) => a + s.quantity, 0) : p.stock,
+        reservedStock: hasRows ? mine.reduce((a, s) => a + s.reservedQuantity, 0) : p.reservedStock,
+      };
+    });
 
     const stockValue       = products.reduce((acc, p) => acc + (p.purchasePrice || 0) * p.stock, 0);
     const stockRetailValue = products.reduce((acc, p) => acc + p.price * p.stock, 0);

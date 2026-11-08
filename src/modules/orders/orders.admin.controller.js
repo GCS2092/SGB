@@ -276,18 +276,22 @@ async function searchUsers(req, res, next) {
 async function searchProducts(req, res, next) {
   try {
     const { q = '', categoryId, storeId } = req.query;
+    const term = String(q).trim();
     const effectiveStoreId = storeId
       || (req.storeIds?.length === 1 ? req.storeIds[0] : null)
       || (await resolveStoreIdForCatalog(null));
-
+    const ci = (v) => ({ contains: v, mode: 'insensitive' });
     const products = await prisma.product.findMany({
       where: {
         isActive: true,
         ...buildProductStoreFilter(effectiveStoreId),
         ...(categoryId && { categoryId }),
-        ...(q.trim() && {
+        ...(term && {
           OR: [
-            { name: { contains: q } },
+            { name: ci(term) },
+            { sku: ci(term) },
+            { barcode: ci(term) },
+            { variants: { some: { OR: [{ sku: ci(term) }, { barcode: ci(term) }] } } },
           ],
         }),
       },
@@ -295,17 +299,33 @@ async function searchProducts(req, res, next) {
         images: { take: 1 },
         variants: true,
         category: { select: { id: true, name: true } },
+        storeStocks: effectiveStoreId ? { where: { storeId: effectiveStoreId } } : true,
       },
       take: 20,
       orderBy: { name: 'asc' },
     });
-
-    res.json(products);
+    const result = products.map(({ storeStocks, ...p }) => {
+      const sumFor = (variantId) => storeStocks
+        .filter((s) => (s.variantId || null) === variantId)
+        .reduce((a, s) => ({ q: a.q + s.quantity, r: a.r + s.reservedQuantity }), { q: 0, r: 0 });
+      const variants = p.variants.map((v) => {
+        const s = sumFor(v.id);
+        return { ...v, storeStock: s.q, available: Math.max(0, s.q - s.r) };
+      });
+      const base = sumFor(null);
+      const hasVariants = variants.length > 0;
+      return {
+        ...p,
+        variants,
+        storeStock: hasVariants ? variants.reduce((a, v) => a + v.storeStock, 0) : base.q,
+        available: hasVariants ? variants.reduce((a, v) => a + v.available, 0) : Math.max(0, base.q - base.r),
+      };
+    });
+    res.json(result);
   } catch (err) {
     next(err);
   }
 }
-
 module.exports = {
   getOrdersAdmin,
   updatePaymentStatus,

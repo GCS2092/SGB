@@ -135,6 +135,7 @@ async function getAllProductsAdmin(query, accessibleStoreIds = null) {
         category: true,
         store: { select: { id: true, name: true, code: true } },
         supplier: { select: { id: true, name: true, phone: true } },
+        storeStocks: { include: { store: { select: { id: true, name: true, code: true } } } },
         seller: { select: { id: true, firstName: true, lastName: true, email: true } }, // ← ajouté
       },
       orderBy: { name: 'asc' },
