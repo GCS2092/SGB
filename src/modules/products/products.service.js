@@ -158,7 +158,25 @@ async function getProductBySlug(slug, query = {}) {
   return product;
 }
 
-async function createProduct(data) {
+/* LOT1 */
+function cleanProductData(raw = {}) {
+  const d = { ...raw };
+  for (const k of ['sku', 'barcode']) {
+    if (d[k] !== undefined) {
+      const v = d[k] == null ? '' : String(d[k]).trim();
+      d[k] = v === '' ? null : v;
+    }
+  }
+  if (d.supplierId === '') d.supplierId = null;
+  if (d.lowStockAlert === '' || d.lowStockAlert === null) d.lowStockAlert = 5;
+  else if (d.lowStockAlert !== undefined) d.lowStockAlert = Math.round(Number(d.lowStockAlert));
+  if (d.overstockAlert === '') d.overstockAlert = null;
+  else if (d.overstockAlert != null) d.overstockAlert = Math.round(Number(d.overstockAlert));
+  return d;
+}
+
+async function createProduct(rawData) {
+  const data = cleanProductData(rawData);
   const { images = [], variants = [], variantDisplayMode, storeId, sellerId, status, ...productData } = data;
 
   // Déterminer le statut initial
@@ -202,7 +220,8 @@ async function createProduct(data) {
   });
 }
 
-async function updateProduct(id, data) {
+async function updateProduct(id, rawData) {
+  const data = cleanProductData(rawData);
   const { images = [], variants = [], variantDisplayMode, storeId, sellerId, status, ...productData } = data;
 
   const existing = await prisma.product.findUnique({
@@ -212,7 +231,7 @@ async function updateProduct(id, data) {
 
   const existingVariantIds = existing?.variants.map((v) => v.id) || [];
   const incomingIds = variants.filter((v) => v.id).map((v) => v.id);
-  const toDelete = existingVariantIds.filter((vid) => !incomingIds.includes(vid));
+  const toDelete = data.variants === undefined ? [] : existingVariantIds.filter((vid) => !incomingIds.includes(vid));
 
   const restockedVariantIds = [];
   let productRestocked = false;
@@ -267,7 +286,7 @@ async function updateProduct(id, data) {
       }
     }
 
-    await tx.productImage.deleteMany({ where: { productId: id } });
+    if (data.images !== undefined) await tx.productImage.deleteMany({ where: { productId: id } });
     if (images.length > 0) {
       await tx.productImage.createMany({
         data: images.map((img) => ({
@@ -319,7 +338,62 @@ async function assignProductSupplier(id, supplierId) {
     select: { id: true, name: true, supplierId: true },
   });
 }
+/* LOT1 variantes */
+const httpErr = (m, s = 400) => { const e = new Error(m); e.status = s; return e; };
+const cleanStr = (v) => (v == null ? '' : String(v).trim());
+const orNull = (v) => { const s = cleanStr(v); return s === '' ? null : s; };
+const variantErr = (e) => (e.code === 'P2002' ? httpErr('Cette variante (taille/couleur), ce SKU ou ce code-barres existe déjà.', 409) : e);
+
+async function addVariant(productId, body = {}) {
+  const size = cleanStr(body.size);
+  const color = cleanStr(body.color);
+  if (!size && !color) throw httpErr('Indiquez une taille ou une couleur.');
+  const product = await prisma.product.findUnique({ where: { id: productId }, select: { id: true } });
+  if (!product) throw httpErr('Produit introuvable.', 404);
+  try {
+    // Stock a 0 : le stock se saisit par mouvement (rattache a une boutique)
+    return await prisma.productVariant.create({
+      data: { productId, size, color, stock: 0, sku: orNull(body.sku), barcode: orNull(body.barcode) },
+    });
+  } catch (e) { throw variantErr(e); }
+}
+
+async function updateVariant(variantId, body = {}) {
+  const data = {};
+  if (body.size !== undefined) data.size = cleanStr(body.size);
+  if (body.color !== undefined) data.color = cleanStr(body.color);
+  if (body.sku !== undefined) data.sku = orNull(body.sku);
+  if (body.barcode !== undefined) data.barcode = orNull(body.barcode);
+  try {
+    return await prisma.productVariant.update({ where: { id: variantId }, data });
+  } catch (e) {
+    if (e.code === 'P2025') throw httpErr('Variante introuvable.', 404);
+    throw variantErr(e);
+  }
+}
+
+async function deleteVariant(variantId) {
+  const v = await prisma.productVariant.findUnique({ where: { id: variantId } });
+  if (!v) throw httpErr('Variante introuvable.', 404);
+  if (v.stock !== 0 || v.reservedStock !== 0) throw httpErr('Stock non nul : mettez le stock à zéro avant de supprimer la variante.', 409);
+  const where = { variantId };
+  const counts = await Promise.all([
+    prisma.orderItem.count({ where }),
+    prisma.stockMovement.count({ where }),
+    prisma.stockTransferItem.count({ where }),
+    prisma.purchaseOrderItem.count({ where }),
+    prisma.inventoryLine.count({ where }),
+    prisma.stockAlert.count({ where }),
+  ]);
+  if (counts.some((c) => c > 0)) throw httpErr('Variante déjà utilisée (commandes, mouvements, transferts…) : elle ne peut plus être supprimée.', 409);
+  await prisma.productVariant.delete({ where: { id: variantId } }); // StoreStock supprime en cascade
+  return { success: true };
+}
+
 module.exports = {
+  addVariant,
+  updateVariant,
+  deleteVariant,
   getProducts,
   getAllProductsAdmin,
   getProductBySlug,

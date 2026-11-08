@@ -113,7 +113,21 @@ async function assignSupplier(req, res, next) {
   }
 }
 
+/* LOT1 */
+async function addVariant(req, res, next) {
+  try { res.status(201).json(await productsService.addVariant(req.params.id, req.body)); } catch (error) { next(error); }
+}
+async function updateVariant(req, res, next) {
+  try { res.json(await productsService.updateVariant(req.params.variantId, req.body)); } catch (error) { next(error); }
+}
+async function deleteVariant(req, res, next) {
+  try { res.json(await productsService.deleteVariant(req.params.variantId)); } catch (error) { next(error); }
+}
+
 module.exports = {
+  addVariant,
+  updateVariant,
+  deleteVariant,
   getProducts,
   getProductFilters,
   getAllProductsAdmin,

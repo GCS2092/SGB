@@ -122,3 +122,40 @@ Say "10. AUDIT DES ROLES"
 "filtrage par boutique (storeId dans where) : " + (Hits 'storeId')
 Get-Content src\middlewares\store.middleware.js | Select-Object -First 45
 } *>&1 | Out-String | Set-Clipboard
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+je veux qeu tu m'aides a proposer un design meilleur pour mon projet de gestion de stock sans pour autant casser le backend si tu as des dependances a proposer ou autes je ne suis pas contrePS C:\SGB-V2\frontend> npm run dev
+
+> frontend@0.0.0 dev
+> vite
+
+
+  VITE v8.3.5  ready in 375 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose
+  ➜  press h + enter to show help
+et je veux que tout se fasse en powershel via setclipboard et powerhsll directement selon ce que tu veux faire et dones les commandes en une fois 

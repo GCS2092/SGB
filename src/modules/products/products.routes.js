@@ -274,4 +274,9 @@ router.patch('/:id/supplier', authenticate, requireAdmin, productsController.ass
  */
 router.delete('/:id', authenticate, requireAdmin, productsController.deleteProduct);
 
+/* LOT1 : variantes (chemins a 2 segments, aucun conflit avec /:id ni /:slug) */
+router.post('/:id/variants', authenticate, requireAdmin, productsController.addVariant);
+router.put('/variants/:variantId', authenticate, requireAdmin, productsController.updateVariant);
+router.delete('/variants/:variantId', authenticate, requireAdmin, productsController.deleteVariant);
+
 module.exports = router;
